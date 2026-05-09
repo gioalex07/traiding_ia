@@ -4,7 +4,6 @@ import psycopg
 
 from rac.config import Settings
 
-
 MIGRATIONS_DIR = Path(__file__).resolve().parents[2] / "db" / "migrations"
 
 

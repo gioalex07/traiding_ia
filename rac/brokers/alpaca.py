@@ -6,7 +6,6 @@ import urllib.request
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 
-from rac.market_data.models import OHLCVBar
 from rac.brokers.base import (
     AccountSnapshot,
     BrokerAdapter,
@@ -19,6 +18,7 @@ from rac.brokers.base import (
     Position,
 )
 from rac.config import Settings, TradingMode
+from rac.market_data.models import OHLCVBar
 
 
 class AlpacaBrokerAdapter(BrokerAdapter):
@@ -26,7 +26,8 @@ class AlpacaBrokerAdapter(BrokerAdapter):
         self.settings = settings
 
     async def capabilities(self) -> BrokerCapabilities:
-        environment = BrokerEnvironment.LIVE if self.settings.trading_mode == TradingMode.LIVE else BrokerEnvironment.PAPER
+        is_live = self.settings.trading_mode == TradingMode.LIVE
+        environment = BrokerEnvironment.LIVE if is_live else BrokerEnvironment.PAPER
         return BrokerCapabilities(
             name="alpaca",
             environment=environment,

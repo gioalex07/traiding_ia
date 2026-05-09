@@ -75,7 +75,8 @@ class BacktestEngine:
         if portfolio.has_position(symbol) and bars:
             last_bar = bars[-1]
             last_price = float(last_bar["close"])
-            last_time = last_bar["time"] if isinstance(last_bar["time"], datetime) else datetime.fromisoformat(str(last_bar["time"]))
+            raw_time = last_bar["time"]
+            last_time = raw_time if isinstance(raw_time, datetime) else datetime.fromisoformat(str(raw_time))
             portfolio.close_position(symbol, last_price, last_time, "end_of_backtest", len(bars) - 1)
 
         final_equity = portfolio.equity_curve[-1]["equity"] if portfolio.equity_curve else request.initial_cash

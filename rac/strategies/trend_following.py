@@ -1,7 +1,6 @@
 from rac.strategies.models import Signal, SignalDirection, StrategyManifest
 from rac.strategies.validation import StrategyValidator
 
-
 TREND_FOLLOWING_MANIFEST = StrategyManifest(
     strategy_id="trend_following_v1",
     version="0.1.0",

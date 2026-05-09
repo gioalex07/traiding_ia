@@ -11,7 +11,7 @@ from rac.db.bootstrap import bootstrap_database
 from rac.features.models import FeatureComputeRequest
 from rac.features.repository import FeatureRepository
 from rac.features.service import FeatureService
-from rac.market_data.models import MarketDataIngestRequest, OHLCVBar
+from rac.market_data.models import MarketDataIngestRequest
 from rac.market_data.repository import MarketDataRepository
 from rac.market_data.service import MarketDataIngestor
 from rac.orders.executor import PaperOrderExecutor

@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 
 from rac.backtest.engine import BacktestEngine
 from rac.backtest.metrics import _max_drawdown, _sharpe, compute_metrics
-from rac.backtest.models import BacktestRequest, BacktestTrade
+from rac.backtest.models import BacktestRequest
 from rac.backtest.portfolio import BacktestPortfolio
 
 
@@ -66,7 +66,7 @@ class BacktestEngineTest(unittest.TestCase):
     def test_downtrend_generates_no_buy_trades(self) -> None:
         bars = _make_bars(30, trend=-0.003)
         result = BacktestEngine().run(self._request(bars), bars)
-        buys = [t for t in result.trades if t.side == "buy" and t.exit_reason != "end_of_backtest"]
+        [t for t in result.trades if t.side == "buy" and t.exit_reason != "end_of_backtest"]
         # En bajada fuerte no debería haber señales de compra ejecutadas
         self.assertEqual(len(result.trades), 0)
 

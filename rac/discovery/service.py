@@ -1,3 +1,4 @@
+import json
 import os
 import platform
 import shutil
@@ -5,7 +6,6 @@ import socket
 import subprocess
 import urllib.error
 import urllib.request
-import json
 from dataclasses import asdict, dataclass
 from urllib.parse import urlparse
 

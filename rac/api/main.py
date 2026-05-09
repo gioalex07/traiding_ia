@@ -6,6 +6,7 @@ from rac.audit.repository import AuditRepository
 from rac.backtest.engine import BacktestEngine
 from rac.backtest.models import BacktestRequest, BacktestResult
 from rac.backtest.repository import BacktestRepository
+from rac.brokers.alpaca import AlpacaBrokerAdapter
 from rac.config import load_settings
 from rac.db.bootstrap import bootstrap_database
 from rac.db.health import check_postgres, check_redis
@@ -13,13 +14,12 @@ from rac.discovery.service import EnvironmentDiscoveryService
 from rac.features.models import FeatureComputeRequest, FeatureComputeResult
 from rac.features.repository import FeatureRepository
 from rac.features.service import FeatureService
-from rac.market_data.models import MarketDataIngestRequest, MarketDataIngestResult
-from rac.market_data.repository import MarketDataRepository
-from rac.market_data.service import MarketDataIngestor
-from rac.brokers.alpaca import AlpacaBrokerAdapter
 from rac.local_ai.models import ExplainSignalRequest, ExplainSignalResult, LocalAICapabilities
 from rac.local_ai.repository import AIInteractionRepository
 from rac.local_ai.service import LocalAIService
+from rac.market_data.models import MarketDataIngestRequest, MarketDataIngestResult
+from rac.market_data.repository import MarketDataRepository
+from rac.market_data.service import MarketDataIngestor
 from rac.orders.executor import PaperOrderExecutor
 from rac.orders.models import ExecuteSignalRequest, OrderExecutionResult
 from rac.orders.reconciliation import ReconciliationResult, ReconciliationService
@@ -30,7 +30,6 @@ from rac.risk.models import RiskDecision, RiskEvaluationRequest
 from rac.strategies.models import SignalGenerateRequest, SignalGenerateResult
 from rac.strategies.repository import SignalRepository
 from rac.strategies.service import StrategyEngine
-
 
 app = FastAPI(
     title="RAC API",

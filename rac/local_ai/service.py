@@ -4,7 +4,6 @@ from rac.local_ai.models import ExplainSignalResult, LocalAICapabilities
 from rac.local_ai.repository import AIInteractionRepository
 from rac.strategies.repository import SignalRepository
 
-
 PROMPT_TEMPLATE_ID = "explain_signal_v1"
 PROMPT_VERSION = "0.1.0"
 
