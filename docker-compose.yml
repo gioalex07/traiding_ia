@@ -1,0 +1,215 @@
+name: rac
+
+x-common-env: &common-env
+  RAC_ENV: ${RAC_ENV:-dev}
+  RAC_TRADING_MODE: ${RAC_TRADING_MODE:-paper}
+  RAC_LIVE_TRADING_ENABLED: ${RAC_LIVE_TRADING_ENABLED:-false}
+  RAC_BROKER: ${RAC_BROKER:-auto}
+  DATABASE_URL: postgresql+psycopg://rac:rac@postgres:5432/rac
+  REDIS_URL: redis://redis:6379/0
+  EVENT_BUS_URL: ${EVENT_BUS_URL:-redpanda:9092}
+  OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
+  ALPACA_PAPER_BASE_URL: ${ALPACA_PAPER_BASE_URL:-https://paper-api.alpaca.markets/v2}
+  ALPACA_DATA_BASE_URL: ${ALPACA_DATA_BASE_URL:-https://data.alpaca.markets/v2}
+  ALPACA_API_KEY: ${ALPACA_API_KEY:-}
+  ALPACA_API_SECRET: ${ALPACA_API_SECRET:-}
+  RAC_SYMBOLS: ${RAC_SYMBOLS:-AAPL}
+  RAC_TIMEFRAME: ${RAC_TIMEFRAME:-1Min}
+  RAC_LOOP_INTERVAL: ${RAC_LOOP_INTERVAL:-60}
+
+services:
+  api:
+    image: rac/api:dev
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: api
+    profiles: ["dev", "paper", "backtest"]
+    environment:
+      <<: *common-env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redpanda:
+        condition: service_started
+    ports:
+      - "8000:8000"
+    user: "10001:10001"
+    read_only: true
+    tmpfs:
+      - /tmp
+
+  worker:
+    image: rac/worker:dev
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: worker
+    profiles: ["dev", "paper", "backtest"]
+    environment:
+      <<: *common-env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redpanda:
+        condition: service_started
+    user: "10001:10001"
+
+  scheduler:
+    image: rac/scheduler:dev
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: scheduler
+    profiles: ["dev", "paper", "backtest"]
+    environment:
+      <<: *common-env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    user: "10001:10001"
+
+  postgres:
+    image: timescale/timescaledb:latest-pg16
+    profiles: ["dev", "paper", "backtest", "observability"]
+    environment:
+      POSTGRES_USER: rac
+      POSTGRES_PASSWORD: rac
+      POSTGRES_DB: rac
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rac -d rac"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    profiles: ["dev", "paper", "backtest"]
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redpanda:
+    image: redpandadata/redpanda:latest
+    profiles: ["dev", "paper", "backtest"]
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp
+      - "1"
+      - --memory
+      - 1G
+      - --reserve-memory
+      - 0M
+      - --node-id
+      - "0"
+      - --check=false
+      - --kafka-addr
+      - PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr
+      - PLAINTEXT://redpanda:9092
+    ports:
+      - "9092:9092"
+      - "9644:9644"
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+
+  prometheus:
+    image: prom/prometheus:latest
+    profiles: ["observability", "dev", "paper"]
+    volumes:
+      - ./ops/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:latest
+    profiles: ["observability", "dev", "paper"]
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+
+  loki:
+    image: grafana/loki:latest
+    profiles: ["observability", "dev", "paper"]
+    ports:
+      - "3100:3100"
+    volumes:
+      - loki-data:/loki
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:latest
+    profiles: ["dev", "backtest", "paper"]
+    command:
+      - mlflow
+      - server
+      - --host
+      - 0.0.0.0
+      - --port
+      - "5000"
+      - --backend-store-uri
+      - postgresql://rac:rac@postgres:5432/rac
+      - --default-artifact-root
+      - /mlflow/artifacts
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow-data:/mlflow/artifacts
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["ollama-local", "gpu"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: ["gpu"]
+
+volumes:
+  postgres-data:
+  redis-data:
+  redpanda-data:
+  prometheus-data:
+  grafana-data:
+  loki-data:
+  mlflow-data:
+  ollama-data:

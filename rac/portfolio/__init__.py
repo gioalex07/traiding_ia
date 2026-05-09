@@ -1,0 +1,2 @@
+"""Paper portfolio accounting."""
+
