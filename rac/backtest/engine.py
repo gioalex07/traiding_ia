@@ -5,6 +5,7 @@ from rac.backtest.metrics import compute_metrics
 from rac.backtest.models import BacktestRequest, BacktestResult
 from rac.backtest.portfolio import BacktestPortfolio
 from rac.features.engine import FeatureEngine
+from rac.strategies.mean_reversion import MeanReversionStrategy
 from rac.strategies.models import SignalDirection
 from rac.strategies.trend_following import TrendFollowingStrategy
 
@@ -99,7 +100,9 @@ class BacktestEngine:
         )
 
     @staticmethod
-    def _load_strategy(strategy_id: str) -> TrendFollowingStrategy:
-        if strategy_id != "trend_following_v1":
-            raise ValueError(f"unsupported_strategy:{strategy_id}")
-        return TrendFollowingStrategy()
+    def _load_strategy(strategy_id: str) -> TrendFollowingStrategy | MeanReversionStrategy:
+        if strategy_id == "trend_following_v1":
+            return TrendFollowingStrategy()
+        if strategy_id == "mean_reversion_v1":
+            return MeanReversionStrategy()
+        raise ValueError(f"unsupported_strategy:{strategy_id}")

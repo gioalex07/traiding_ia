@@ -1,5 +1,6 @@
 from rac.config import Settings
 from rac.features.repository import FeatureRepository
+from rac.strategies.mean_reversion import MeanReversionStrategy
 from rac.strategies.models import SignalGenerateRequest, SignalGenerateResult
 from rac.strategies.repository import SignalRepository
 from rac.strategies.trend_following import TrendFollowingStrategy
@@ -35,8 +36,9 @@ class StrategyEngine:
         )
 
     @staticmethod
-    def _load_strategy(strategy_id: str) -> TrendFollowingStrategy:
-        if strategy_id != "trend_following_v1":
-            raise ValueError(f"unsupported_strategy:{strategy_id}")
-        return TrendFollowingStrategy()
-
+    def _load_strategy(strategy_id: str) -> TrendFollowingStrategy | MeanReversionStrategy:
+        if strategy_id == "trend_following_v1":
+            return TrendFollowingStrategy()
+        if strategy_id == "mean_reversion_v1":
+            return MeanReversionStrategy()
+        raise ValueError(f"unsupported_strategy:{strategy_id}")

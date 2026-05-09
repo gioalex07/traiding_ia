@@ -32,7 +32,6 @@ logging.basicConfig(
 )
 log = logging.getLogger("rac.worker")
 
-_STRATEGY_ID = "trend_following_v1"
 _FEATURE_SET = "technical_v1"
 _SIGNAL_MAX_AGE_SECONDS = 120
 
@@ -163,11 +162,7 @@ async def _process_symbol(
         FeatureComputeRequest(symbol=symbol, timeframe=timeframe, feature_set=_FEATURE_SET)
     )
 
-    StrategyEngine(settings, feature_repo, signal_repo).generate(
-        SignalGenerateRequest(symbol=symbol, timeframe=timeframe, strategy_id=_STRATEGY_ID)
-    )
-
-    # Monitoreo SL/TP para posición abierta
+    # Monitoreo SL/TP para posición abierta (antes de generar nuevas señales)
     if position is not None:
         await _maybe_close_position(
             symbol=symbol,
@@ -179,65 +174,72 @@ async def _process_symbol(
             audit=audit,
         )
 
-    # Evaluar señal más reciente
-    latest = signal_repo.latest_signals(symbol, timeframe, limit=1)
-    if not latest:
-        return
-
-    signal = latest[0]
-    direction = str(signal["direction"])
-
-    if direction == "hold":
-        log.info("hold symbol=%s confidence=%.4f", symbol, float(signal["confidence"]))
-        return
-
-    raw_time = signal["time"]
-    signal_time: datetime = raw_time if isinstance(raw_time, datetime) else datetime.fromisoformat(str(raw_time))
-    if signal_time.tzinfo is None:
-        signal_time = signal_time.replace(tzinfo=UTC)
-    age_seconds = (datetime.now(UTC) - signal_time).total_seconds()
-
-    skip = _skip_reason(direction, age_seconds, position)
-    if skip:
-        log.info("skip symbol=%s direction=%s reason=%s", symbol, direction, skip)
-        return
-
-    signal_id = str(signal["id"])
-    if order_repo.has_order_for_signal(signal_id):
-        log.info("already_executed symbol=%s signal_id=%s", symbol, signal_id)
-        return
-
     current_asset_exposure_pct = (
         (position.market_value / portfolio_equity) * 100.0 if position else 0.0
     )
 
-    log.info(
-        "executing symbol=%s direction=%s confidence=%.4f exposure=%.2f%%",
-        symbol, direction, float(signal["confidence"]), current_asset_exposure_pct,
-    )
-    result = await PaperOrderExecutor(
-        settings=settings,
-        signal_repository=signal_repo,
-        order_repository=order_repo,
-        portfolio_repository=portfolio_repo,
-        risk_manager=RiskManager(settings),
-        broker_adapter=broker,
-    ).execute_signal(
-        ExecuteSignalRequest(
-            signal_id=signal_id,
-            portfolio_equity=portfolio_equity,
-            portfolio_cash=portfolio_cash,
-            current_asset_exposure_pct=current_asset_exposure_pct,
+    # Ejecutar estrategias en orden — primera señal accionable gana
+    for strategy_id in settings.watched_strategies:
+        StrategyEngine(settings, feature_repo, signal_repo).generate(
+            SignalGenerateRequest(symbol=symbol, timeframe=timeframe, strategy_id=strategy_id)
         )
-    )
-    log.info("order status=%s order_id=%s reason=%s", result.status, result.order_id, result.reason)
-    _audit(audit, "worker.order_executed", settings, {
-        "symbol": symbol,
-        "direction": direction,
-        "status": result.status,
-        "order_id": result.order_id,
-        "reason": result.reason,
-    })
+
+        latest = signal_repo.latest_signals(symbol, timeframe, strategy_id=strategy_id, limit=1)
+        if not latest:
+            continue
+
+        signal = latest[0]
+        direction = str(signal["direction"])
+
+        if direction == "hold":
+            log.info("hold symbol=%s strategy=%s confidence=%.4f", symbol, strategy_id, float(signal["confidence"]))
+            continue
+
+        raw_time = signal["time"]
+        signal_time: datetime = raw_time if isinstance(raw_time, datetime) else datetime.fromisoformat(str(raw_time))
+        if signal_time.tzinfo is None:
+            signal_time = signal_time.replace(tzinfo=UTC)
+        age_seconds = (datetime.now(UTC) - signal_time).total_seconds()
+
+        skip = _skip_reason(direction, age_seconds, position)
+        if skip:
+            log.info("skip symbol=%s strategy=%s direction=%s reason=%s", symbol, strategy_id, direction, skip)
+            continue
+
+        signal_id = str(signal["id"])
+        if order_repo.has_order_for_signal(signal_id):
+            log.info("already_executed symbol=%s strategy=%s signal_id=%s", symbol, strategy_id, signal_id)
+            continue
+
+        log.info(
+            "executing symbol=%s strategy=%s direction=%s confidence=%.4f exposure=%.2f%%",
+            symbol, strategy_id, direction, float(signal["confidence"]), current_asset_exposure_pct,
+        )
+        result = await PaperOrderExecutor(
+            settings=settings,
+            signal_repository=signal_repo,
+            order_repository=order_repo,
+            portfolio_repository=portfolio_repo,
+            risk_manager=RiskManager(settings),
+            broker_adapter=broker,
+        ).execute_signal(
+            ExecuteSignalRequest(
+                signal_id=signal_id,
+                portfolio_equity=portfolio_equity,
+                portfolio_cash=portfolio_cash,
+                current_asset_exposure_pct=current_asset_exposure_pct,
+            )
+        )
+        log.info("order status=%s order_id=%s reason=%s", result.status, result.order_id, result.reason)
+        _audit(audit, "worker.order_executed", settings, {
+            "symbol": symbol,
+            "strategy_id": strategy_id,
+            "direction": direction,
+            "status": result.status,
+            "order_id": result.order_id,
+            "reason": result.reason,
+        })
+        break  # ejecutó una señal para este símbolo — no intentar más estrategias
 
 
 async def _maybe_close_position(

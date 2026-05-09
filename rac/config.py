@@ -52,6 +52,7 @@ class Settings:
     cooldown_after_losses: int
     watched_symbols: tuple[str, ...]
     watched_timeframe: str
+    watched_strategies: tuple[str, ...]
     loop_interval_seconds: int
 
     @property
@@ -89,6 +90,11 @@ def load_settings() -> Settings:
             if s.strip()
         ),
         watched_timeframe=os.getenv("RAC_TIMEFRAME", "1Min"),
+        watched_strategies=tuple(
+            s.strip()
+            for s in os.getenv("RAC_STRATEGIES", "trend_following_v1,mean_reversion_v1").split(",")
+            if s.strip()
+        ),
         loop_interval_seconds=int(os.getenv("RAC_LOOP_INTERVAL", "60")),
     )
 

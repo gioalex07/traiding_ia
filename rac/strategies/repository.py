@@ -60,34 +60,43 @@ class SignalRepository:
             conn.commit()
         return len(rows)
 
-    def latest_signals(self, symbol: str, timeframe: str, limit: int = 100) -> list[dict[str, object]]:
+    def latest_signals(
+        self,
+        symbol: str,
+        timeframe: str,
+        limit: int = 100,
+        strategy_id: str | None = None,
+    ) -> list[dict[str, object]]:
         with psycopg.connect(self._database_url, row_factory=dict_row) as conn:
             with conn.cursor() as cursor:
-                cursor.execute(
-                    """
-                    SELECT
-                        id,
-                        time,
-                        environment,
-                        strategy_id,
-                        strategy_version,
-                        symbol,
-                        timeframe,
-                        direction,
-                        confidence,
-                        stop_loss_pct,
-                        take_profit_pct,
-                        max_position_pct,
-                        invalidation_rules,
-                        raw_payload,
-                        created_at
-                    FROM signals
-                    WHERE symbol = %s AND timeframe = %s
-                    ORDER BY created_at DESC
-                    LIMIT %s
-                    """,
-                    (symbol.upper(), timeframe.upper(), limit),
-                )
+                if strategy_id:
+                    cursor.execute(
+                        """
+                        SELECT id, time, environment, strategy_id, strategy_version,
+                               symbol, timeframe, direction, confidence,
+                               stop_loss_pct, take_profit_pct, max_position_pct,
+                               invalidation_rules, raw_payload, created_at
+                        FROM signals
+                        WHERE symbol = %s AND timeframe = %s AND strategy_id = %s
+                        ORDER BY created_at DESC
+                        LIMIT %s
+                        """,
+                        (symbol.upper(), timeframe.upper(), strategy_id, limit),
+                    )
+                else:
+                    cursor.execute(
+                        """
+                        SELECT id, time, environment, strategy_id, strategy_version,
+                               symbol, timeframe, direction, confidence,
+                               stop_loss_pct, take_profit_pct, max_position_pct,
+                               invalidation_rules, raw_payload, created_at
+                        FROM signals
+                        WHERE symbol = %s AND timeframe = %s
+                        ORDER BY created_at DESC
+                        LIMIT %s
+                        """,
+                        (symbol.upper(), timeframe.upper(), limit),
+                    )
                 return list(cursor.fetchall())
 
     def get_signal(self, signal_id: str) -> dict[str, object] | None:

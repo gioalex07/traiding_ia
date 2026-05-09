@@ -16,6 +16,7 @@ x-common-env: &common-env
   ALPACA_API_SECRET: ${ALPACA_API_SECRET:-}
   RAC_SYMBOLS: ${RAC_SYMBOLS:-AAPL}
   RAC_TIMEFRAME: ${RAC_TIMEFRAME:-1Min}
+  RAC_STRATEGIES: ${RAC_STRATEGIES:-trend_following_v1,mean_reversion_v1}
   RAC_LOOP_INTERVAL: ${RAC_LOOP_INTERVAL:-60}
 
 services:
