@@ -3,6 +3,9 @@ from datetime import UTC, datetime
 from fastapi import FastAPI, HTTPException
 
 from rac.audit.repository import AuditRepository
+from rac.backtest.engine import BacktestEngine
+from rac.backtest.models import BacktestRequest, BacktestResult
+from rac.backtest.repository import BacktestRepository
 from rac.config import load_settings
 from rac.db.bootstrap import bootstrap_database
 from rac.db.health import check_postgres, check_redis
@@ -330,6 +333,51 @@ async def explain_signal(request: ExplainSignalRequest) -> ExplainSignalResult:
         return result
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"local_ai_unavailable:{exc.__class__.__name__}") from exc
+
+
+@app.post("/backtest/run", response_model=BacktestResult)
+async def run_backtest(request: BacktestRequest) -> BacktestResult:
+    settings = load_settings()
+    try:
+        bars = MarketDataRepository(settings).latest_ohlcv(
+            symbol=request.symbol,
+            timeframe=request.timeframe,
+            limit=10_000,
+        )
+        in_range = [
+            b for b in bars
+            if request.start <= b["time"].replace(tzinfo=None) <= request.end
+        ]
+        if not in_range:
+            raise HTTPException(
+                status_code=422,
+                detail=f"no_data_for_range: ingest OHLCV bars for {request.symbol}/{request.timeframe} first",
+            )
+        result = BacktestEngine().run(request, in_range)
+        repo = BacktestRepository(settings)
+        backtest_id = repo.save(result)
+        result.backtest_id = backtest_id
+        return result
+    except (ValueError, HTTPException):
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"backtest_error:{exc.__class__.__name__}") from exc
+
+
+@app.get("/backtest/list")
+async def list_backtests(limit: int = 20) -> list[dict[str, object]]:
+    settings = load_settings()
+    safe_limit = max(1, min(limit, 100))
+    return BacktestRepository(settings).list_recent(safe_limit)
+
+
+@app.get("/backtest/{backtest_id}")
+async def get_backtest(backtest_id: str) -> dict[str, object]:
+    settings = load_settings()
+    result = BacktestRepository(settings).get(backtest_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="backtest_not_found")
+    return result
 
 
 @app.post("/risk/evaluate", response_model=RiskDecision)
