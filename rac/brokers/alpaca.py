@@ -120,7 +120,8 @@ class AlpacaBrokerAdapter(BrokerAdapter):
                     volume=float(bar["v"]),
                 ))
 
-            page_token = payload.get("next_page_token") or None
+            raw_token = payload.get("next_page_token")
+            page_token = str(raw_token) if raw_token else None
             if not page_token:
                 break
 
