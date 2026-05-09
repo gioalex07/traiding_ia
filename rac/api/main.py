@@ -17,7 +17,13 @@ from rac.features.service import FeatureService
 from rac.local_ai.models import ExplainSignalRequest, ExplainSignalResult, LocalAICapabilities
 from rac.local_ai.repository import AIInteractionRepository
 from rac.local_ai.service import LocalAIService
-from rac.market_data.models import MarketDataIngestRequest, MarketDataIngestResult
+from rac.market_data.loader import HistoricalDataLoader
+from rac.market_data.models import (
+    HistoricalFetchRequest,
+    HistoricalFetchResult,
+    MarketDataIngestRequest,
+    MarketDataIngestResult,
+)
 from rac.market_data.repository import MarketDataRepository
 from rac.market_data.service import MarketDataIngestor
 from rac.orders.executor import PaperOrderExecutor
@@ -109,6 +115,28 @@ async def broker_positions() -> list[dict[str, object]]:
         return [position.__dict__ for position in positions]
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"broker_unavailable:{exc}") from exc
+
+
+@app.post("/market-data/fetch-historical", response_model=HistoricalFetchResult)
+async def fetch_historical(request: HistoricalFetchRequest) -> HistoricalFetchResult:
+    settings = load_settings()
+    try:
+        result = await HistoricalDataLoader(
+            broker=AlpacaBrokerAdapter(settings),
+            repository=MarketDataRepository(settings),
+        ).fetch_and_store(request)
+        AuditRepository(settings).record_event(
+            event_type="market_data.historical_fetched",
+            environment=settings.trading_mode.value,
+            correlation_id=f"historical:{request.symbol.upper()}:{request.timeframe}",
+            actor="historical-data-loader",
+            payload=result.model_dump(),
+        )
+        return result
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"historical_fetch_error:{exc}") from exc
 
 
 @app.post("/market-data/ohlcv", response_model=MarketDataIngestResult)

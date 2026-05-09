@@ -37,3 +37,23 @@ class MarketDataIngestResult(BaseModel):
     rejected: int
     rejection_reasons: list[str]
 
+
+class HistoricalFetchRequest(BaseModel):
+    symbol: str = Field(min_length=1)
+    timeframe: str = Field(default="1Day", min_length=1)
+    start: datetime
+    end: datetime
+
+    def model_post_init(self, __context: object) -> None:
+        if self.start >= self.end:
+            raise ValueError("start must be before end")
+
+
+class HistoricalFetchResult(BaseModel):
+    symbol: str
+    timeframe: str
+    fetched: int
+    accepted: int
+    rejected: int
+    pages: int
+

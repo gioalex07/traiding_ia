@@ -79,6 +79,53 @@ class AlpacaBrokerAdapter(BrokerAdapter):
             raw_payload=dict(payload),
         )
 
+    async def get_historical_bars(
+        self,
+        symbol: str,
+        timeframe: str,
+        start: datetime,
+        end: datetime,
+        page_size: int = 10_000,
+    ) -> tuple[list[OHLCVBar], int]:
+        """Fetches all bars in the range, paginating automatically. Returns (bars, pages)."""
+        all_bars: list[OHLCVBar] = []
+        page_token: str | None = None
+        pages = 0
+
+        while True:
+            params: dict[str, str] = {
+                "timeframe": timeframe,
+                "start": start.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "end": end.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "limit": str(page_size),
+                "sort": "asc",
+                "feed": "iex",
+            }
+            if page_token:
+                params["page_token"] = page_token
+
+            payload = self._data_request_json(f"/stocks/{symbol.upper()}/bars", params)
+            pages += 1
+
+            for bar in payload.get("bars") or []:
+                all_bars.append(OHLCVBar(
+                    time=bar["t"],
+                    broker="alpaca",
+                    symbol=symbol.upper(),
+                    timeframe=timeframe,
+                    open=float(bar["o"]),
+                    high=float(bar["h"]),
+                    low=float(bar["l"]),
+                    close=float(bar["c"]),
+                    volume=float(bar["v"]),
+                ))
+
+            page_token = payload.get("next_page_token") or None
+            if not page_token:
+                break
+
+        return all_bars, pages
+
     async def get_latest_bars(self, symbol: str, timeframe: str, limit: int = 20) -> list[OHLCVBar]:
         # start=7 días atrás + sort=desc → las N barras más recientes disponibles
         start = (datetime.now(UTC) - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%SZ")
