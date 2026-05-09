@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 
 from fastapi import FastAPI, HTTPException
 
+from rac.admin.kill_switch import KillSwitchActivateRequest, KillSwitchRepository, KillSwitchState
 from rac.audit.repository import AuditRepository
 from rac.backtest.engine import BacktestEngine
 from rac.backtest.models import BacktestRequest, BacktestResult
@@ -50,6 +51,49 @@ async def health() -> dict[str, str]:
         "status": "ok",
         "timestamp": datetime.now(UTC).isoformat(),
     }
+
+
+@app.get("/admin/kill-switch", response_model=KillSwitchState)
+async def kill_switch_state() -> KillSwitchState:
+    settings = load_settings()
+    return KillSwitchRepository(settings).current_state()
+
+
+@app.post("/admin/kill-switch", response_model=KillSwitchState)
+async def activate_kill_switch(request: KillSwitchActivateRequest) -> KillSwitchState:
+    settings = load_settings()
+    ks = KillSwitchRepository(settings)
+    event_id = ks.activate(reason=request.reason, actor=request.actor)
+    AuditRepository(settings).record_event(
+        event_type="kill_switch.activated",
+        environment=settings.trading_mode.value,
+        correlation_id=event_id,
+        actor=request.actor,
+        payload={"reason": request.reason},
+    )
+    return ks.current_state()
+
+
+@app.post("/admin/kill-switch/reset", response_model=KillSwitchState)
+async def deactivate_kill_switch(request: KillSwitchActivateRequest) -> KillSwitchState:
+    settings = load_settings()
+    ks = KillSwitchRepository(settings)
+    event_id = ks.deactivate(reason=request.reason, actor=request.actor)
+    AuditRepository(settings).record_event(
+        event_type="kill_switch.deactivated",
+        environment=settings.trading_mode.value,
+        correlation_id=event_id,
+        actor=request.actor,
+        payload={"reason": request.reason},
+    )
+    return ks.current_state()
+
+
+@app.get("/admin/kill-switch/history")
+async def kill_switch_history(limit: int = 20) -> list[dict[str, object]]:
+    settings = load_settings()
+    safe_limit = max(1, min(limit, 100))
+    return KillSwitchRepository(settings).history(safe_limit)
 
 
 @app.post("/admin/bootstrap")

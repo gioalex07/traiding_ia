@@ -4,6 +4,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
+from rac.admin.kill_switch import KillSwitchRepository
 from rac.audit.repository import AuditRepository
 from rac.brokers.alpaca import AlpacaBrokerAdapter
 from rac.brokers.base import OrderRequest, Position
@@ -86,7 +87,13 @@ async def run_cycle(settings: Settings, broker: AlpacaBrokerAdapter) -> None:
     except Exception as exc:
         log.warning("reconcile_error: %s", exc)
 
-    # 2. Estado de cuenta y posiciones desde Alpaca
+    # 2. Kill switch — bloquea ejecución de órdenes (reconciliación ya corrió)
+    if KillSwitchRepository(settings).is_active():
+        log.warning("KILL_SWITCH_ACTIVE — order execution blocked this cycle")
+        _audit(audit, "worker.kill_switch_blocked", settings, {"cycle_skipped": True})
+        return
+
+    # 3. Estado de cuenta y posiciones desde Alpaca
     try:
         account = await broker.get_account()
     except Exception as exc:
