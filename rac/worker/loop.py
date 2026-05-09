@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import logging
 from datetime import UTC, datetime
+from typing import Any
 
 from rac.audit.repository import AuditRepository
 from rac.brokers.alpaca import AlpacaBrokerAdapter
@@ -183,8 +184,9 @@ async def _process_symbol(
         log.info("hold symbol=%s confidence=%.4f", symbol, float(signal["confidence"]))
         return
 
-    signal_time = signal["time"]
-    if hasattr(signal_time, "tzinfo") and signal_time.tzinfo is None:
+    raw_time = signal["time"]
+    signal_time: datetime = raw_time if isinstance(raw_time, datetime) else datetime.fromisoformat(str(raw_time))
+    if signal_time.tzinfo is None:
         signal_time = signal_time.replace(tzinfo=UTC)
     age_seconds = (datetime.now(UTC) - signal_time).total_seconds()
 
@@ -241,9 +243,10 @@ async def _maybe_close_position(
     settings: Settings,
     audit: AuditRepository,
 ) -> None:
-    buy_order = order_repo.latest_filled_buy(symbol)
-    if not buy_order:
+    raw_order = order_repo.latest_filled_buy(symbol)
+    if not raw_order:
         return
+    buy_order: dict[str, Any] = dict(raw_order)
 
     sl = float(buy_order["stop_loss_price"]) if buy_order.get("stop_loss_price") else None
     tp = float(buy_order["take_profit_price"]) if buy_order.get("take_profit_price") else None

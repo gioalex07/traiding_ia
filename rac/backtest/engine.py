@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 
 from rac.backtest.metrics import compute_metrics
 from rac.backtest.models import BacktestRequest, BacktestResult
@@ -9,7 +10,7 @@ from rac.strategies.trend_following import TrendFollowingStrategy
 
 
 class BacktestEngine:
-    def run(self, request: BacktestRequest, bars: list[dict[str, object]]) -> BacktestResult:
+    def run(self, request: BacktestRequest, bars: list[dict[str, Any]]) -> BacktestResult:
         if len(bars) < 5:
             raise ValueError(f"insufficient_data: need at least 5 bars, got {len(bars)}")
 

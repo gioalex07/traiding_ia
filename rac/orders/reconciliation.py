@@ -1,3 +1,5 @@
+from typing import Any
+
 from pydantic import BaseModel
 
 from rac.brokers.alpaca import AlpacaBrokerAdapter
@@ -33,28 +35,29 @@ class ReconciliationService:
         errors: list[str] = []
 
         for order in pending:
-            broker_order_id = str(order["broker_order_id"])
+            order_any: dict[str, Any] = dict(order)
+            broker_order_id = str(order_any["broker_order_id"])
             try:
                 broker_order = await self.broker.get_order(broker_order_id)
                 alpaca_status = str(broker_order.get("status", ""))
 
                 if alpaca_status in _FILLED_STATUSES:
-                    filled_qty = float(broker_order.get("filled_qty") or order["quantity"])
-                    filled_price = float(broker_order.get("filled_avg_price") or order["estimated_price"])
+                    filled_qty = float(broker_order.get("filled_qty") or order_any["quantity"])
+                    filled_price = float(broker_order.get("filled_avg_price") or order_any["estimated_price"])
                     filled_at = str(broker_order.get("filled_at") or "")
 
                     self.orders.mark_filled(
-                        order_id=str(order["id"]),
+                        order_id=str(order_any["id"]),
                         filled_price=filled_price,
                         filled_qty=filled_qty,
                         filled_at=filled_at,
                     )
-                    current_cash = self.portfolio.current_cash(environment=str(order["environment"]))
+                    current_cash = self.portfolio.current_cash(environment=str(order_any["environment"]))
                     self.portfolio.apply_paper_fill(
-                        environment=str(order["environment"]),
-                        order_id=str(order["id"]),
-                        symbol=str(order["symbol"]),
-                        side=str(order["side"]),
+                        environment=str(order_any["environment"]),
+                        order_id=str(order_any["id"]),
+                        symbol=str(order_any["symbol"]),
+                        side=str(order_any["side"]),
                         quantity=filled_qty,
                         price=filled_price,
                         starting_cash=current_cash,
@@ -62,7 +65,7 @@ class ReconciliationService:
                     filled += 1
 
                 elif alpaca_status in _TERMINAL_STATUSES:
-                    self.orders.mark_cancelled(str(order["id"]), alpaca_status)
+                    self.orders.mark_cancelled(str(order_any["id"]), alpaca_status)
                     cancelled += 1
 
             except Exception as exc:

@@ -5,6 +5,7 @@ import urllib.parse
 import urllib.request
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from rac.brokers.base import (
     AccountSnapshot,
@@ -161,7 +162,7 @@ class AlpacaBrokerAdapter(BrokerAdapter):
         except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
             raise RuntimeError(f"alpaca_unavailable:{exc.__class__.__name__}") from exc
 
-    def _request_json(self, path: str) -> object:
+    def _request_json(self, path: str) -> Any:
         base_url = os.getenv("ALPACA_PAPER_BASE_URL", "https://paper-api.alpaca.markets").rstrip("/")
         api_key = os.getenv("ALPACA_API_KEY")
         api_secret = os.getenv("ALPACA_API_SECRET")

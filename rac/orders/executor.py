@@ -1,4 +1,5 @@
 import hashlib
+from typing import Any
 
 from rac.brokers.base import BrokerAdapter, OrderRequest
 from rac.config import Settings, TradingMode
@@ -6,7 +7,15 @@ from rac.orders.models import ExecuteSignalRequest, OrderExecutionResult, OrderS
 from rac.orders.repository import OrderRepository
 from rac.portfolio.repository import PortfolioRepository
 from rac.risk.manager import RiskManager
-from rac.risk.models import OrderIntent, OrderSide, OrderType, PortfolioState, RiskDecision, RiskEvaluationRequest
+from rac.risk.models import (
+    OrderIntent,
+    OrderSide,
+    OrderType,
+    PortfolioState,
+    RiskDecision,
+    RiskDecisionStatus,
+    RiskEvaluationRequest,
+)
 from rac.strategies.repository import SignalRepository
 
 
@@ -38,7 +47,7 @@ class PaperOrderExecutor:
                 reason="live_blocked",
             )
 
-        signal = self.signal_repository.get_signal(request.signal_id)
+        signal: dict[str, Any] | None = self.signal_repository.get_signal(request.signal_id)
         if signal is None:
             decision = self._rejected_decision("signal_not_found")
             return OrderExecutionResult(
@@ -185,7 +194,7 @@ class PaperOrderExecutor:
     @staticmethod
     def _rejected_decision(reason: str) -> RiskDecision:
         return RiskDecision(
-            status="rejected",
+            status=RiskDecisionStatus.REJECTED,
             approved=False,
             reasons=[reason],
             max_notional_allowed=0,

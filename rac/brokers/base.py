@@ -91,5 +91,7 @@ class BrokerAdapter(ABC):
 
     @abstractmethod
     async def stream_fills(self) -> AsyncIterator[FillEvent]:
+        if False:
+            yield FillEvent("", "", 0, 0, "")
         raise NotImplementedError
 

@@ -1,5 +1,6 @@
 from decimal import Decimal
 from statistics import fmean, pstdev
+from typing import Any
 
 from rac.features.models import FeaturePoint
 
@@ -7,7 +8,7 @@ from rac.features.models import FeaturePoint
 class FeatureEngine:
     def compute_technical_v1(
         self,
-        bars: list[dict[str, object]],
+        bars: list[dict[str, Any]],
         *,
         feature_set: str = "technical_v1",
     ) -> list[FeaturePoint]:

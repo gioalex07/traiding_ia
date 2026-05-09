@@ -345,7 +345,7 @@ async def run_backtest(request: BacktestRequest) -> BacktestResult:
         )
         in_range = [
             b for b in bars
-            if request.start <= b["time"].replace(tzinfo=None) <= request.end
+            if request.start <= b["time"].replace(tzinfo=None) <= request.end  # type: ignore[union-attr]
         ]
         if not in_range:
             raise HTTPException(

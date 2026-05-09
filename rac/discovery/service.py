@@ -7,6 +7,7 @@ import subprocess
 import urllib.error
 import urllib.request
 from dataclasses import asdict, dataclass
+from typing import Any
 from urllib.parse import urlparse
 
 from rac.config import BrokerName, Settings, TradingMode
@@ -70,7 +71,7 @@ class EnvironmentDiscoveryService:
             degraded_reasons=degraded_reasons,
         )
 
-    def _detect_hardware(self) -> dict[str, object]:
+    def _detect_hardware(self) -> dict[str, Any]:
         ram_bytes = 0
         try:
             page_size = os.sysconf("SC_PAGE_SIZE")
@@ -101,7 +102,7 @@ class EnvironmentDiscoveryService:
             "gpu": gpu,
         }
 
-    def _detect_services(self) -> dict[str, object]:
+    def _detect_services(self) -> dict[str, Any]:
         return {
             "database": {
                 "configured": bool(self.settings.database_url),
@@ -117,7 +118,7 @@ class EnvironmentDiscoveryService:
             },
         }
 
-    def _detect_ollama(self) -> dict[str, object]:
+    def _detect_ollama(self) -> dict[str, Any]:
         endpoint = self.settings.ollama_base_url.rstrip("/")
         try:
             with urllib.request.urlopen(f"{endpoint}/api/tags", timeout=1.5) as response:

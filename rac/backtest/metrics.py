@@ -1,11 +1,12 @@
 import math
 from statistics import mean, pstdev
+from typing import Any
 
 from rac.backtest.models import BacktestMetrics, BacktestTrade
 
 
 def compute_metrics(
-    equity_curve: list[dict[str, object]],
+    equity_curve: list[dict[str, Any]],
     trades: list[BacktestTrade],
     initial_cash: float,
 ) -> BacktestMetrics:
@@ -41,7 +42,7 @@ def compute_metrics(
     )
 
 
-def _max_drawdown(equity_curve: list[dict[str, object]]) -> float:
+def _max_drawdown(equity_curve: list[dict[str, Any]]) -> float:
     if len(equity_curve) < 2:
         return 0.0
     peak = float(equity_curve[0]["equity"])
@@ -56,7 +57,7 @@ def _max_drawdown(equity_curve: list[dict[str, object]]) -> float:
     return max_dd
 
 
-def _sharpe(equity_curve: list[dict[str, object]], risk_free: float = 0.0) -> float:
+def _sharpe(equity_curve: list[dict[str, Any]], risk_free: float = 0.0) -> float:
     if len(equity_curve) < 2:
         return 0.0
     equities = [float(p["equity"]) for p in equity_curve]

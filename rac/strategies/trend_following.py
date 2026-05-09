@@ -1,3 +1,5 @@
+from typing import Any
+
 from rac.strategies.models import Signal, SignalDirection, StrategyManifest
 from rac.strategies.validation import StrategyValidator
 
@@ -22,7 +24,7 @@ class TrendFollowingStrategy:
         self.manifest = manifest
         self.validator = StrategyValidator()
 
-    def generate(self, features: list[dict[str, object]], *, environment: str) -> list[Signal]:
+    def generate(self, features: list[dict[str, Any]], *, environment: str) -> list[Signal]:
         manifest_reasons = self.validator.validate_manifest(self.manifest)
         if manifest_reasons:
             return []
