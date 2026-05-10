@@ -238,6 +238,14 @@ async def _process_symbol(
             log.info("hold symbol=%s strategy=%s confidence=%.4f", symbol, strategy_id, float(signal["confidence"]))
             continue
 
+        confidence = float(signal["confidence"])
+        if confidence < settings.min_signal_confidence:
+            log.info(
+                "low_confidence symbol=%s strategy=%s direction=%s confidence=%.4f threshold=%.2f",
+                symbol, strategy_id, direction, confidence, settings.min_signal_confidence,
+            )
+            continue
+
         raw_time = signal["time"]
         signal_time: datetime = raw_time if isinstance(raw_time, datetime) else datetime.fromisoformat(str(raw_time))
         if signal_time.tzinfo is None:

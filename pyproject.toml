@@ -13,7 +13,6 @@ ignore = [
 known-first-party = ["rac"]
 
 [tool.ruff.lint.per-file-ignores]
-# TODO: investigate why ruff I001 persists despite matching structure of passing files
 "tests/test_daily_report.py" = ["I001"]
 
 [tool.pytest.ini_options]

@@ -56,6 +56,7 @@ class Settings:
     loop_interval_seconds: int
     telegram_bot_token: str
     telegram_chat_id: str
+    min_signal_confidence: float
 
     @property
     def live_trading_status(self) -> str:
@@ -100,5 +101,6 @@ def load_settings() -> Settings:
         loop_interval_seconds=int(os.getenv("RAC_LOOP_INTERVAL", "60")),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN", ""),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID", ""),
+        min_signal_confidence=float_env("RAC_MIN_SIGNAL_CONFIDENCE", 0.6),
     )
 

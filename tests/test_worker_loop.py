@@ -1,6 +1,7 @@
 import unittest
 
 from rac.brokers.base import Position
+from rac.config import load_settings
 from rac.worker.loop import _skip_reason, _sl_tp_trigger
 
 
@@ -67,6 +68,24 @@ class SlTpTriggerTest(unittest.TestCase):
 
     def test_only_tp_defined_and_triggered(self) -> None:
         self.assertEqual(_sl_tp_trigger(120.0, stop_loss_price=None, take_profit_price=110.0), "take_profit")
+
+
+class SignalConfidenceConfigTest(unittest.TestCase):
+    def test_default_min_confidence_is_0_6(self) -> None:
+        settings = load_settings()
+        self.assertEqual(settings.min_signal_confidence, 0.6)
+
+    def test_confidence_below_threshold_would_be_skipped(self) -> None:
+        settings = load_settings()
+        self.assertFalse(0.55 >= settings.min_signal_confidence)
+
+    def test_confidence_at_threshold_passes(self) -> None:
+        settings = load_settings()
+        self.assertTrue(0.6 >= settings.min_signal_confidence)
+
+    def test_confidence_above_threshold_passes(self) -> None:
+        settings = load_settings()
+        self.assertTrue(0.85 >= settings.min_signal_confidence)
 
 
 if __name__ == "__main__":
