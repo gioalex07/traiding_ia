@@ -321,6 +321,8 @@ async def latest_signals(symbol: str, timeframe: str, limit: int = 100) -> list[
 async def execute_signal(request: ExecuteSignalRequest) -> OrderExecutionResult:
     settings = load_settings()
     try:
+        kill_switch = KillSwitchRepository(settings).current_state()
+        effective_request = request.model_copy(update={"kill_switch_active": kill_switch.active})
         result = await PaperOrderExecutor(
             settings=settings,
             signal_repository=SignalRepository(settings),
@@ -328,14 +330,17 @@ async def execute_signal(request: ExecuteSignalRequest) -> OrderExecutionResult:
             portfolio_repository=PortfolioRepository(settings),
             risk_manager=RiskManager(settings),
             broker_adapter=AlpacaBrokerAdapter(settings),
-        ).execute_signal(request)
+        ).execute_signal(effective_request)
         audit = AuditRepository(settings)
         audit.record_event(
             event_type="orders.paper_execution_attempted",
             environment=settings.trading_mode.value,
             correlation_id=request.signal_id,
             actor="order-executor",
-            payload=result.model_dump(),
+            payload={
+                **result.model_dump(),
+                "kill_switch_active": kill_switch.active,
+            },
         )
         if result.risk_decision.reasons and result.reason == "risk_rejected":
             audit.record_event(

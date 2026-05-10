@@ -92,6 +92,49 @@ class PaperOrderExecutorTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.status, OrderStatus.REJECTED)
         self.assertEqual(result.reason, "hold_signal")
 
+    async def test_rejects_when_kill_switch_is_active(self) -> None:
+        signal_id = str(uuid4())
+        signal = {
+            "id": signal_id,
+            "time": datetime.now(UTC),
+            "environment": "paper",
+            "strategy_id": "trend_following_v1",
+            "strategy_version": "0.1.0",
+            "symbol": "AAPL",
+            "timeframe": "1MIN",
+            "direction": "buy",
+            "confidence": 0.6,
+            "stop_loss_pct": 1.5,
+            "take_profit_pct": 3.0,
+            "max_position_pct": 2.0,
+            "invalidation_rules": ["close_crosses_below_sma_5_for_buy"],
+            "raw_payload": {"values": {"close": 100}},
+        }
+        order_repository = FakeOrderRepository()
+        portfolio_repository = FakePortfolioRepository()
+        executor = PaperOrderExecutor(
+            settings=load_settings(),
+            signal_repository=FakeSignalRepository(signal),
+            order_repository=order_repository,
+            portfolio_repository=portfolio_repository,
+            risk_manager=RiskManager(load_settings()),
+        )
+
+        result = await executor.execute_signal(
+            ExecuteSignalRequest(
+                signal_id=signal_id,
+                portfolio_equity=10_000,
+                portfolio_cash=10_000,
+                kill_switch_active=True,
+            )
+        )
+
+        self.assertEqual(result.status, OrderStatus.REJECTED)
+        self.assertEqual(result.reason, "risk_rejected")
+        self.assertIn("kill_switch_active", result.risk_decision.reasons)
+        self.assertEqual(len(order_repository.inserted), 0)
+        self.assertEqual(len(portfolio_repository.fills), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

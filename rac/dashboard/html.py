@@ -157,6 +157,7 @@ DASHBOARD_HTML = """
       <span id="last-refresh" class="sub"></span>
       <button class="secondary" onclick="refresh()">Refresh</button>
       <button class="secondary" onclick="markToMarket()">Mark to Market</button>
+      <button class="secondary" onclick="reconcileOrders()">Reconcile Orders</button>
       <button class="danger" onclick="activateKillSwitch()">Kill Switch</button>
       <button onclick="resetKillSwitch()">Reset</button>
     </div>
@@ -208,6 +209,12 @@ DASHBOARD_HTML = """
         <h2>Mark to Market</h2>
         <div class="content" id="mark-to-market">
           <span class="muted">Run to update NAV from latest available prices</span>
+        </div>
+      </section>
+      <section class="panel span-12">
+        <h2>Order Reconciliation</h2>
+        <div class="content" id="reconciliation">
+          <span class="muted">Run to sync submitted paper orders with Alpaca</span>
         </div>
       </section>
 
@@ -363,6 +370,27 @@ DASHBOARD_HTML = """
             { label: "Unrealized", render: x => fmtMoney(x.unrealized_pnl) },
             { label: "Error", render: x => x.error || "-" }
           ])}
+        `;
+        refresh();
+      } catch (err) {
+        resultEl.innerHTML = `<span class="error">${err.message}</span>`;
+      }
+    }
+    async function reconcileOrders() {
+      const resultEl = document.getElementById("reconciliation");
+      resultEl.innerHTML = '<span class="muted">Reconciling submitted orders...</span>';
+      try {
+        const response = await fetch("/orders/reconcile", { method: "POST" });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || response.statusText);
+        resultEl.innerHTML = `
+          <div class="metric">
+            <span class="value">${data.filled} filled</span>
+            <span class="label">
+              checked ${data.checked} / pending ${data.pending} / cancelled ${data.cancelled}
+            </span>
+          </div>
+          <pre>${JSON.stringify(data.errors || [], null, 2)}</pre>
         `;
         refresh();
       } catch (err) {

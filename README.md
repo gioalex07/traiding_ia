@@ -145,6 +145,7 @@ curl -X POST http://localhost:8000/orders/execute-signal \
   }"
 
 curl "http://localhost:8000/orders?symbol=AAPL&limit=5"
+curl -X POST "http://localhost:8000/orders/reconcile"
 ```
 
 Inspect paper portfolio:
