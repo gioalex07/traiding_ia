@@ -206,6 +206,14 @@ DASHBOARD_HTML = """
         <h2>Broker Positions</h2>
         <div class="content" id="broker-positions"></div>
       </section>
+      <section class="panel span-6">
+        <h2>Fills Today</h2>
+        <div class="content" id="fills-today"><span class="muted">Loading...</span></div>
+      </section>
+      <section class="panel span-6">
+        <h2>Fills This Week</h2>
+        <div class="content" id="fills-week"><span class="muted">Loading...</span></div>
+      </section>
       <section class="panel span-12">
         <h2>Mark to Market</h2>
         <div class="content" id="mark-to-market">
@@ -253,7 +261,13 @@ DASHBOARD_HTML = """
       </section>
 
       <section class="panel span-12">
-        <h2>NAV History</h2>
+        <h2>NAV History
+          <span style="float:right;font-weight:normal;font-size:12px;display:flex;gap:6px">
+            <button class="secondary" id="nav-7d"  onclick="setNavRange(7)">7d</button>
+            <button class="secondary" id="nav-30d" onclick="setNavRange(30)">30d</button>
+            <button class="secondary" id="nav-all" onclick="setNavRange(0)">All</button>
+          </span>
+        </h2>
         <div class="content"><canvas id="nav-chart"></canvas></div>
       </section>
 
@@ -370,13 +384,35 @@ DASHBOARD_HTML = """
       document.getElementById("ai").textContent = ai.status || "-";
       document.getElementById("ai").className = `status ${statusClass(ai.status)}`;
       document.getElementById("ai-models").textContent = (ai.models || []).join(", ");
-      document.getElementById("portfolio-snapshot").innerHTML = snapshot && Object.keys(snapshot).length
-        ? `<div class="metric">
+      if (snapshot && Object.keys(snapshot).length) {
+        const dd = Math.max(0, Number(snapshot.drawdown) || 0);
+        const maxDd = 5;
+        const ddPct = Math.min(dd / maxDd * 100, 100);
+        const ddColor = dd < 2 ? "good" : dd < 4 ? "warn" : "bad";
+        const pnl = Number(snapshot.pnl_daily) || 0;
+        const pnlSign = pnl >= 0 ? "+" : "";
+        const pnlColor = pnl >= 0 ? "good" : "bad";
+        document.getElementById("portfolio-snapshot").innerHTML = `
+          <div class="metric">
             <span class="value">${fmtMoney(snapshot.nav)}</span>
-            <span class="label">cash ${fmtMoney(snapshot.cash)} / drawdown ${fmtNum(snapshot.drawdown)}</span>
+            <span class="label">
+              cash ${fmtMoney(snapshot.cash)} &nbsp;·&nbsp;
+              <span style="color:var(--${pnlColor})">${pnlSign}${fmtMoney(pnl)} today</span>
+            </span>
           </div>
-          <pre>${JSON.stringify(snapshot.exposure || {}, null, 2)}</pre>`
-        : error(data.portfolio_snapshot);
+          <div style="margin-top:10px">
+            <div class="label" style="display:flex;justify-content:space-between">
+              <span>Drawdown</span><span style="color:var(--${ddColor})">${dd.toFixed(2)}%</span>
+            </div>
+            <div style="background:#edf0f5;border-radius:4px;height:8px;margin-top:4px">
+              <div style="background:var(--${ddColor});width:${ddPct}%;height:8px;
+                border-radius:4px;transition:width 0.4s"></div>
+            </div>
+            <div class="label" style="text-align:right;margin-top:2px">max ${maxDd}%</div>
+          </div>`;
+      } else {
+        document.getElementById("portfolio-snapshot").innerHTML = error(data.portfolio_snapshot);
+      }
       document.getElementById("portfolio-positions").innerHTML = rows(racPositions, [
         { label: "Symbol", key: "symbol" }, { label: "Qty", render: x => fmtNum(x.quantity) },
         { label: "Avg", render: x => fmtMoney(x.average_price) },
@@ -406,6 +442,7 @@ DASHBOARD_HTML = """
       }
       drawNavChart(portfolioHistory || []);
       document.getElementById("last-refresh").textContent = new Date().toLocaleTimeString();
+      loadFills();
       loadAuditTrail();
       loadStrategyPerformance();
     }
@@ -523,7 +560,24 @@ DASHBOARD_HTML = """
         resultEl.innerHTML = `<span class="error">${err.message}</span>`;
       }
     }
-    function drawNavChart(points) {
+    let _navHistory = [];
+    let _navRange = 0;
+    function setNavRange(days) {
+      _navRange = days;
+      ["7d","30d","all"].forEach(k => {
+        document.getElementById("nav-"+k).style.fontWeight = "";
+      });
+      const key = days === 7 ? "7d" : days === 30 ? "30d" : "all";
+      document.getElementById("nav-"+key).style.fontWeight = "700";
+      drawNavChart(_navHistory);
+    }
+    function drawNavChart(allPoints) {
+      _navHistory = allPoints || [];
+      let points = _navHistory;
+      if (_navRange > 0) {
+        const cutoff = Date.now() - _navRange * 86400000;
+        points = _navHistory.filter(p => new Date(p.time).getTime() >= cutoff);
+      }
       const canvas = document.getElementById("nav-chart");
       const rect = canvas.getBoundingClientRect();
       const scale = window.devicePixelRatio || 1;
@@ -536,7 +590,7 @@ DASHBOARD_HTML = """
       ctx.clearRect(0, 0, width, height);
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, width, height);
-      const values = (points || []).map(p => Number(p.nav)).filter(Number.isFinite);
+      const values = points.map(p => Number(p.nav)).filter(Number.isFinite);
       if (values.length < 2) {
         ctx.fillStyle = "#667085";
         ctx.font = "13px system-ui";
@@ -551,24 +605,48 @@ DASHBOARD_HTML = """
       ctx.lineWidth = 1;
       for (let i = 0; i < 4; i++) {
         const y = pad + i * ((height - pad * 2) / 3);
-        ctx.beginPath();
-        ctx.moveTo(pad, y);
-        ctx.lineTo(width - pad, y);
-        ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(width - pad, y); ctx.stroke();
       }
-      ctx.strokeStyle = "#0f766e";
+      const positive = values[values.length - 1] >= values[0];
+      ctx.strokeStyle = positive ? "#0f766e" : "#b91c1c";
       ctx.lineWidth = 2;
       ctx.beginPath();
       values.forEach((value, index) => {
         const x = pad + (index / (values.length - 1)) * (width - pad * 2);
         const y = height - pad - ((value - min) / range) * (height - pad * 2);
-        if (index === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+        if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
       });
       ctx.stroke();
       ctx.fillStyle = "#263241";
       ctx.font = "12px system-ui";
       ctx.fillText(fmtMoney(values[values.length - 1]), pad, 18);
+    }
+    async function loadFills() {
+      const cols = [
+        { label: "Time",     render: x => new Date(x.created_at).toLocaleTimeString() },
+        { label: "Symbol",   key: "symbol" },
+        { label: "Side",     render: x => {
+          const c = x.side === "buy" ? "good" : "bad";
+          return `<span style="color:var(--${c})">${x.side.toUpperCase()}</span>`;
+        }},
+        { label: "Qty",      render: x => fmtNum(x.quantity) },
+        { label: "Price",    render: x => fmtMoney(x.price) },
+        { label: "Notional", render: x => fmtMoney(x.notional) },
+      ];
+      try {
+        const [r1, r2] = await Promise.all([
+          fetch("/portfolio/fills?environment=paper&days=1", { cache: "no-store" }),
+          fetch("/portfolio/fills?environment=paper&days=7", { cache: "no-store" }),
+        ]);
+        const today = await r1.json();
+        const week  = await r2.json();
+        document.getElementById("fills-today").innerHTML =
+          today.length ? rows(today, cols) : '<span class="muted">No fills today</span>';
+        document.getElementById("fills-week").innerHTML =
+          week.length ? rows(week, cols) : '<span class="muted">No fills this week</span>';
+      } catch (e) {
+        document.getElementById("fills-today").innerHTML = `<span class="error">${e.message}</span>`;
+      }
     }
     async function activateKillSwitch() {
       const reason = prompt("Reason");

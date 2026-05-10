@@ -580,6 +580,12 @@ async def get_backtest(backtest_id: str) -> dict[str, object]:
     return result
 
 
+@app.get("/portfolio/fills")
+async def portfolio_fills(environment: str = "paper", days: int = 7) -> list[dict[str, object]]:
+    settings = load_settings()
+    return OrderRepository(settings).recent_fills(days=days, environment=environment)
+
+
 @app.get("/audit/events")
 async def audit_events(
     environment: str = "paper",
