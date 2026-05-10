@@ -1,3 +1,4 @@
+import json
 from decimal import Decimal
 
 import psycopg
@@ -139,6 +140,51 @@ class PortfolioRepository:
                 rows = [dict(row) for row in cursor.fetchall()]
                 rows.reverse()
                 return rows
+
+    def record_mark_to_market(
+        self,
+        *,
+        environment: str,
+        cash: float,
+        valuations: list[dict[str, object]],
+        errors: list[str],
+        source: str,
+    ) -> None:
+        cash_decimal = Decimal(str(cash))
+        positions_value = Decimal("0")
+        with psycopg.connect(self._database_url) as conn:
+            with conn.cursor() as cursor:
+                for valuation in valuations:
+                    market_value = Decimal(str(valuation["market_value"]))
+                    positions_value += market_value
+                    cursor.execute(
+                        """
+                        UPDATE positions
+                        SET market_value = %s, updated_at = now()
+                        WHERE environment = %s AND symbol = %s
+                        """,
+                        (market_value, environment, str(valuation["symbol"]).upper()),
+                    )
+                nav = cash_decimal + positions_value
+                exposure = {
+                    "source": source,
+                    "positions_value": str(positions_value),
+                    "prices": {
+                        str(valuation["symbol"]).upper(): str(valuation["latest_price"])
+                        for valuation in valuations
+                    },
+                    "errors": errors,
+                }
+                cursor.execute(
+                    """
+                    INSERT INTO portfolio_snapshots (
+                        time, environment, nav, cash, pnl_daily, drawdown, exposure
+                    )
+                    VALUES (now(), %s, %s, %s, 0, 0, %s::jsonb)
+                    """,
+                    (environment, nav, cash_decimal, json.dumps(exposure)),
+                )
+            conn.commit()
 
     def positions(self, environment: str = "paper") -> list[dict[str, object]]:
         with psycopg.connect(self._database_url, row_factory=dict_row) as conn:

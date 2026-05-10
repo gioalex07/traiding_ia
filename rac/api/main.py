@@ -37,7 +37,9 @@ from rac.orders.reconciliation import ReconciliationResult, ReconciliationServic
 from rac.orders.repository import OrderRepository
 from rac.pipeline.models import PaperPipelineRequest, PaperPipelineResult
 from rac.pipeline.service import PaperAnalysisPipeline
+from rac.portfolio.models import MarkToMarketResult
 from rac.portfolio.repository import PortfolioRepository
+from rac.portfolio.service import PortfolioMarkToMarketService
 from rac.risk.manager import RiskManager
 from rac.risk.models import RiskDecision, RiskEvaluationRequest
 from rac.strategies.models import SignalGenerateRequest, SignalGenerateResult
@@ -407,6 +409,29 @@ async def portfolio_history(environment: str = "paper", limit: int = 100) -> lis
         return PortfolioRepository(settings).history(environment=environment, limit=limit)
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"portfolio_unavailable:{exc.__class__.__name__}") from exc
+
+
+@app.post("/portfolio/mark-to-market", response_model=MarkToMarketResult)
+async def mark_to_market(environment: str = "paper", timeframe: str = "1Day") -> MarkToMarketResult:
+    settings = load_settings()
+    try:
+        result = await PortfolioMarkToMarketService(
+            settings=settings,
+            repository=PortfolioRepository(settings),
+            broker=AlpacaBrokerAdapter(settings),
+        ).run(environment=environment, timeframe=timeframe)
+        AuditRepository(settings).record_event(
+            event_type="portfolio.mark_to_market",
+            environment=environment,
+            correlation_id=f"mark-to-market:{environment}:{timeframe}",
+            actor="portfolio-manager",
+            payload=result.model_dump(),
+        )
+        return result
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"portfolio_mark_to_market_unavailable:{exc}") from exc
 
 
 @app.post("/pipeline/paper/run", response_model=PaperPipelineResult)

@@ -156,6 +156,7 @@ DASHBOARD_HTML = """
     <div class="actions">
       <span id="last-refresh" class="sub"></span>
       <button class="secondary" onclick="refresh()">Refresh</button>
+      <button class="secondary" onclick="markToMarket()">Mark to Market</button>
       <button class="danger" onclick="activateKillSwitch()">Kill Switch</button>
       <button onclick="resetKillSwitch()">Reset</button>
     </div>
@@ -170,6 +171,7 @@ DASHBOARD_HTML = """
       <section class="panel span-4"><h2>Portfolio Snapshot</h2><div class="content" id="portfolio-snapshot"></div></section>
       <section class="panel span-4"><h2>RAC Positions</h2><div class="content" id="portfolio-positions"></div></section>
       <section class="panel span-4"><h2>Broker Positions</h2><div class="content" id="broker-positions"></div></section>
+      <section class="panel span-12"><h2>Mark to Market</h2><div class="content" id="mark-to-market"><span class="muted">Run to update NAV from latest available prices</span></div></section>
 
       <section class="panel span-12">
         <h2>Paper Analysis Pipeline</h2>
@@ -269,6 +271,28 @@ DASHBOARD_HTML = """
       ]);
       drawNavChart(portfolioHistory || []);
       document.getElementById("last-refresh").textContent = new Date().toLocaleTimeString();
+    }
+    async function markToMarket() {
+      const resultEl = document.getElementById("mark-to-market");
+      resultEl.innerHTML = '<span class="muted">Updating paper NAV...</span>';
+      try {
+        const response = await fetch("/portfolio/mark-to-market?environment=paper&timeframe=1Day", { method: "POST" });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || response.statusText);
+        resultEl.innerHTML = `
+          <div class="metric"><span class="value">${fmtMoney(data.nav)}</span><span class="label">cash ${fmtMoney(data.cash)} / positions ${fmtMoney(data.positions_value)} / ${data.status}</span></div>
+          ${rows(data.positions, [
+            { label: "Symbol", key: "symbol" },
+            { label: "Qty", render: x => fmtNum(x.quantity) },
+            { label: "Last", render: x => fmtMoney(x.latest_price) },
+            { label: "Unrealized", render: x => fmtMoney(x.unrealized_pnl) },
+            { label: "Error", render: x => x.error || "-" }
+          ])}
+        `;
+        refresh();
+      } catch (err) {
+        resultEl.innerHTML = `<span class="error">${err.message}</span>`;
+      }
     }
     async function runPipeline() {
       const resultEl = document.getElementById("pipeline-result");
