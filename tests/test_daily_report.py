@@ -1,5 +1,5 @@
-from datetime import UTC, datetime
 import unittest
+from datetime import UTC, datetime, timedelta
 
 from rac.notifications.service import AlertService
 from rac.reports.daily import DailyReport, DailyReportService
@@ -182,7 +182,6 @@ class AlertServiceDailyReportDeduplicationTest(unittest.TestCase):
         self.assertFalse(svc.should_send_daily_report())
 
     def test_returns_true_when_last_report_was_yesterday(self) -> None:
-        from datetime import timedelta
         svc = self._service()
         svc._last_report_date = (datetime.now(UTC) - timedelta(days=1)).date()
         # Only True after 21:00 UTC — we test the date logic regardless of hour
