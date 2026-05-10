@@ -1,7 +1,49 @@
+from decimal import Decimal
+
 import psycopg
 from psycopg.rows import dict_row
 
 from rac.config import Settings
+
+
+def aggregate_performance(fills: list[dict[str, object]]) -> list[dict[str, object]]:
+    """Pure aggregation: group fills by strategy_id and compute P&L totals.
+
+    Each fill dict must have: strategy_id, side ('buy'|'sell'), notional.
+    Used by StrategyPerformanceService and directly testable without a DB.
+    """
+    groups: dict[str, dict[str, object]] = {}
+    for f in fills:
+        sid = str(f["strategy_id"])
+        if sid not in groups:
+            groups[sid] = {
+                "strategy_id": sid,
+                "buys": 0,
+                "sells": 0,
+                "buy_notional": Decimal("0"),
+                "sell_notional": Decimal("0"),
+            }
+        notional = Decimal(str(f["notional"]))
+        if f["side"] == "buy":
+            groups[sid]["buys"] = int(groups[sid]["buys"]) + 1
+            groups[sid]["buy_notional"] = Decimal(str(groups[sid]["buy_notional"])) + notional
+        else:
+            groups[sid]["sells"] = int(groups[sid]["sells"]) + 1
+            groups[sid]["sell_notional"] = Decimal(str(groups[sid]["sell_notional"])) + notional
+
+    result = []
+    for row in sorted(groups.values(), key=lambda r: str(r["strategy_id"])):
+        buy_n = Decimal(str(row["buy_notional"]))
+        sell_n = Decimal(str(row["sell_notional"]))
+        result.append({
+            "strategy_id": row["strategy_id"],
+            "buys": row["buys"],
+            "sells": row["sells"],
+            "buy_notional": float(buy_n),
+            "sell_notional": float(sell_n),
+            "realized_pnl": float(sell_n - buy_n),
+        })
+    return result
 
 
 class StrategyPerformanceService:
@@ -16,19 +58,12 @@ class StrategyPerformanceService:
                     """
                     SELECT
                         o.strategy_id,
-                        COUNT(*) FILTER (WHERE f.side = 'buy')  AS buys,
-                        COUNT(*) FILTER (WHERE f.side = 'sell') AS sells,
-                        COALESCE(SUM(f.notional) FILTER (WHERE f.side = 'buy'),  0) AS buy_notional,
-                        COALESCE(SUM(f.notional) FILTER (WHERE f.side = 'sell'), 0) AS sell_notional,
-                        COALESCE(SUM(f.notional) FILTER (WHERE f.side = 'sell'), 0)
-                            - COALESCE(SUM(f.notional) FILTER (WHERE f.side = 'buy'), 0)
-                            AS realized_pnl
+                        f.side,
+                        f.notional
                     FROM fills f
                     JOIN orders o ON o.id = f.order_id
                     WHERE f.environment = %s
-                    GROUP BY o.strategy_id
-                    ORDER BY o.strategy_id
                     """,
                     (environment,),
                 )
-                return [dict(row) for row in cursor.fetchall()]
+                return aggregate_performance([dict(row) for row in cursor.fetchall()])

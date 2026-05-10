@@ -1,3 +1,5 @@
+import logging
+from datetime import UTC, datetime
 from typing import Any
 
 from pydantic import BaseModel
@@ -7,8 +9,12 @@ from rac.notifications.service import AlertService
 from rac.orders.repository import OrderRepository
 from rac.portfolio.repository import PortfolioRepository
 
-_FILLED_STATUSES = {"filled"}
-_TERMINAL_STATUSES = {"rejected", "canceled", "expired", "done_for_day"}  # Alpaca usa "canceled" (una l)
+log = logging.getLogger("rac.reconciliation")
+
+_FILLED_STATUSES = {"filled", "partially_filled"}
+_TERMINAL_STATUSES = {"rejected", "canceled", "expired", "done_for_day", "stopped"}
+_KNOWN_PENDING_STATUSES = {"pending_new", "accepted", "accepted_for_bidding", "new", "held", "pending_cancel"}
+_MAX_ORDER_AGE_HOURS = 48
 
 
 class ReconciliationResult(BaseModel):
@@ -77,6 +83,29 @@ class ReconciliationService:
                 elif alpaca_status in _TERMINAL_STATUSES:
                     self.orders.mark_cancelled(str(order_any["id"]), alpaca_status)
                     cancelled += 1
+
+                elif alpaca_status in _KNOWN_PENDING_STATUSES:
+                    age_hours = (
+                        datetime.now(UTC) - datetime.fromisoformat(str(order_any["created_at"]))
+                    ).total_seconds() / 3600
+                    if age_hours > _MAX_ORDER_AGE_HOURS:
+                        log.warning(
+                            "stale_order broker_order_id=%s status=%s age_hours=%.0f — marking expired",
+                            broker_order_id, alpaca_status, age_hours,
+                        )
+                        self.orders.mark_cancelled(str(order_any["id"]), "expired_by_rac")
+                        cancelled += 1
+                    else:
+                        log.debug(
+                            "order_pending broker_order_id=%s status=%s age_hours=%.1f",
+                            broker_order_id, alpaca_status, age_hours,
+                        )
+
+                else:
+                    log.warning(
+                        "unknown_alpaca_status broker_order_id=%s status=%s",
+                        broker_order_id, alpaca_status,
+                    )
 
             except Exception as exc:
                 errors.append(f"{broker_order_id}:{exc}")

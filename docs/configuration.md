@@ -35,6 +35,7 @@ All configuration is via environment variables. Copy `.env.example` to `.env` an
 | `RAC_TIMEFRAME` | `1Min` | Bar timeframe for feature computation |
 | `RAC_STRATEGIES` | `trend_following_v1,mean_reversion_v1` | Ordered list of strategies to run per cycle |
 | `RAC_LOOP_INTERVAL` | `60` | Seconds between worker cycles |
+| `RAC_MIN_SIGNAL_CONFIDENCE` | `0.6` | Minimum signal confidence to execute (0.0–1.0) |
 
 ## Risk Limits
 
