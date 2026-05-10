@@ -35,6 +35,15 @@ class AlertService:
         self._kill_switch_alerted = False
         self._send("✅ <b>Kill switch reset</b> — trading resumed.")
 
+    def on_fill(self, symbol: str, side: str, quantity: float, price: float) -> None:
+        notional = quantity * price
+        icon = "🟢" if side == "buy" else "🔴"
+        self._send(
+            f"{icon} <b>Order filled</b>\n"
+            f"{side.upper()} {quantity:g} {symbol} @ ${price:,.2f}\n"
+            f"Notional: ${notional:,.2f}"
+        )
+
     def on_drawdown(self, current_pct: float, threshold_pct: float) -> None:
         if current_pct < threshold_pct:
             if self._last_drawdown_alerted > 0.0:

@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from rac.brokers.base import Position
 from rac.config import load_settings
-from rac.portfolio.repository import _daily_pnl
+from rac.portfolio.repository import _daily_pnl, _drawdown_pct
 from rac.portfolio.service import PortfolioConsistencyService, PortfolioMarkToMarketService
 
 
@@ -113,6 +113,43 @@ class DailyPnlTest(unittest.TestCase):
 
     def test_flat_day(self) -> None:
         result = _daily_pnl(self._cursor(100_000.0), "paper", Decimal("100000"))
+        self.assertEqual(result, Decimal("0"))
+
+
+class DrawdownPctTest(unittest.TestCase):
+    """Tests for _drawdown_pct — uses a fake cursor to avoid DB dependency."""
+
+    def _cursor(self, peak_nav: float | None) -> object:
+        class FakeCursor:
+            def __init__(self, nav: float | None) -> None:
+                self._nav = nav
+
+            def execute(self, *_: object, **__: object) -> None:
+                pass
+
+            def fetchone(self) -> tuple | None:
+                return (self._nav,) if self._nav is not None else None
+
+        return FakeCursor(peak_nav)
+
+    def test_no_history_returns_zero(self) -> None:
+        result = _drawdown_pct(self._cursor(None), "paper", Decimal("100000"))
+        self.assertEqual(result, Decimal("0"))
+
+    def test_at_peak_returns_zero(self) -> None:
+        result = _drawdown_pct(self._cursor(100_000.0), "paper", Decimal("100000"))
+        self.assertEqual(result, Decimal("0"))
+
+    def test_new_high_returns_zero(self) -> None:
+        result = _drawdown_pct(self._cursor(100_000.0), "paper", Decimal("105000"))
+        self.assertEqual(result, Decimal("0"))
+
+    def test_ten_percent_drawdown(self) -> None:
+        result = _drawdown_pct(self._cursor(100_000.0), "paper", Decimal("90000"))
+        self.assertAlmostEqual(float(result), 10.0, places=4)
+
+    def test_zero_peak_returns_zero(self) -> None:
+        result = _drawdown_pct(self._cursor(0.0), "paper", Decimal("50000"))
         self.assertEqual(result, Decimal("0"))
 
 

@@ -8,6 +8,23 @@ from psycopg.rows import dict_row
 from rac.config import Settings
 
 
+def _drawdown_pct(cursor: Any, environment: str, current_nav: Decimal) -> Decimal:
+    """Returns current drawdown % from the all-time NAV peak (0 at new highs)."""
+    cursor.execute(
+        """
+        SELECT COALESCE(MAX(nav), 0)
+        FROM portfolio_snapshots
+        WHERE environment = %s
+        """,
+        (environment,),
+    )
+    row = cursor.fetchone()
+    peak = Decimal(str(row[0])) if row and row[0] else Decimal("0")
+    if peak <= 0:
+        return Decimal("0")
+    return max(Decimal("0"), (peak - current_nav) / peak * Decimal("100"))
+
+
 def _daily_pnl(cursor: Any, environment: str, current_nav: Decimal) -> Decimal:
     """Returns today's P&L vs the last snapshot recorded before today (UTC midnight)."""
     cursor.execute(
@@ -97,18 +114,20 @@ class PortfolioRepository:
                 cash = Decimal(str(starting_cash)) + cash_delta
                 nav = cash + positions_value
                 pnl_daily = _daily_pnl(cursor, environment, nav)
+                drawdown = _drawdown_pct(cursor, environment, nav)
                 cursor.execute(
                     """
                     INSERT INTO portfolio_snapshots (
                         time, environment, nav, cash, pnl_daily, drawdown, exposure
                     )
-                    VALUES (now(), %s, %s, %s, %s, 0, %s::jsonb)
+                    VALUES (now(), %s, %s, %s, %s, %s, %s::jsonb)
                     """,
                     (
                         environment,
                         nav,
                         cash,
                         pnl_daily,
+                        drawdown,
                         '{"positions_value": "' + str(positions_value) + '"}',
                     ),
                 )
@@ -188,6 +207,7 @@ class PortfolioRepository:
                     )
                 nav = cash_decimal + positions_value
                 pnl_daily = _daily_pnl(cursor, environment, nav)
+                drawdown = _drawdown_pct(cursor, environment, nav)
                 exposure = {
                     "source": source,
                     "positions_value": str(positions_value),
@@ -202,9 +222,9 @@ class PortfolioRepository:
                     INSERT INTO portfolio_snapshots (
                         time, environment, nav, cash, pnl_daily, drawdown, exposure
                     )
-                    VALUES (now(), %s, %s, %s, %s, 0, %s::jsonb)
+                    VALUES (now(), %s, %s, %s, %s, %s, %s::jsonb)
                     """,
-                    (environment, nav, cash_decimal, pnl_daily, json.dumps(exposure)),
+                    (environment, nav, cash_decimal, pnl_daily, drawdown, json.dumps(exposure)),
                 )
             conn.commit()
 

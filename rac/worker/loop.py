@@ -79,7 +79,7 @@ async def run_cycle(settings: Settings, broker: AlpacaBrokerAdapter, alerts: Ale
 
     # 1. Reconciliar órdenes pendientes
     try:
-        recon = await ReconciliationService(broker, order_repo, portfolio_repo).reconcile_pending()
+        recon = await ReconciliationService(broker, order_repo, portfolio_repo, alerts).reconcile_pending()
         if recon.checked:
             log.info(
                 "reconcile checked=%d filled=%d pending=%d cancelled=%d errors=%d",

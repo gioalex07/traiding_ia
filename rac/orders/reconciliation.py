@@ -3,6 +3,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from rac.brokers.alpaca import AlpacaBrokerAdapter
+from rac.notifications.service import AlertService
 from rac.orders.repository import OrderRepository
 from rac.portfolio.repository import PortfolioRepository
 
@@ -24,10 +25,12 @@ class ReconciliationService:
         broker_adapter: AlpacaBrokerAdapter,
         order_repository: OrderRepository,
         portfolio_repository: PortfolioRepository,
+        alerts: AlertService | None = None,
     ) -> None:
         self.broker = broker_adapter
         self.orders = order_repository
         self.portfolio = portfolio_repository
+        self.alerts = alerts
 
     async def reconcile_pending(self) -> ReconciliationResult:
         pending = self.orders.pending_broker_orders()
@@ -63,6 +66,13 @@ class ReconciliationService:
                         starting_cash=current_cash,
                     )
                     filled += 1
+                    if self.alerts:
+                        self.alerts.on_fill(
+                            symbol=str(order_any["symbol"]),
+                            side=str(order_any["side"]),
+                            quantity=filled_qty,
+                            price=filled_price,
+                        )
 
                 elif alpaca_status in _TERMINAL_STATUSES:
                     self.orders.mark_cancelled(str(order_any["id"]), alpaca_status)

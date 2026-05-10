@@ -69,6 +69,31 @@ class AlertServiceKillSwitchTest(unittest.TestCase):
         self.assertEqual(len(client.sent), 3)
 
 
+class AlertServiceFillTest(unittest.TestCase):
+    def _service(self) -> tuple[AlertService, FakeTelegramClient]:
+        client = FakeTelegramClient()
+        return AlertService(client), client  # type: ignore[arg-type]
+
+    def test_buy_fill_sends_message(self) -> None:
+        svc, client = self._service()
+        svc.on_fill("AAPL", "buy", 10.0, 175.50)
+        self.assertEqual(len(client.sent), 1)
+        self.assertIn("BUY", client.sent[0])
+        self.assertIn("AAPL", client.sent[0])
+
+    def test_sell_fill_sends_message(self) -> None:
+        svc, client = self._service()
+        svc.on_fill("AAPL", "sell", 5.0, 180.00)
+        self.assertEqual(len(client.sent), 1)
+        self.assertIn("SELL", client.sent[0])
+
+    def test_each_fill_sends_independently(self) -> None:
+        svc, client = self._service()
+        svc.on_fill("AAPL", "buy", 10.0, 175.0)
+        svc.on_fill("MSFT", "buy", 5.0, 420.0)
+        self.assertEqual(len(client.sent), 2)
+
+
 class AlertServiceDrawdownTest(unittest.TestCase):
     def _service(self) -> tuple[AlertService, FakeTelegramClient]:
         client = FakeTelegramClient()
