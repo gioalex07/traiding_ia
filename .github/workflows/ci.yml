@@ -38,14 +38,14 @@ jobs:
           cache: pip
 
       - name: Install deps
-        run: pip install mypy==1.15.0 -r requirements.txt
+        run: pip install -r requirements-dev.txt
 
       - name: Run mypy
         run: mypy rac/ --ignore-missing-imports --no-strict-optional
 
   # ── 3. Tests ────────────────────────────────────────────────────────
   test:
-    name: Tests (52)
+    name: Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -56,7 +56,7 @@ jobs:
           cache: pip
 
       - name: Install deps
-        run: pip install -r requirements.txt
+        run: pip install -r requirements-dev.txt
 
       - name: Run pytest
         run: pytest tests/ -v --tb=short
@@ -72,6 +72,8 @@ jobs:
           RAC_SYMBOLS: "AAPL"
           RAC_TIMEFRAME: "1Min"
           RAC_LOOP_INTERVAL: "60"
+          TELEGRAM_BOT_TOKEN: ""
+          TELEGRAM_CHAT_ID: ""
 
   # ── 4. Security ─────────────────────────────────────────────────────
   security:
