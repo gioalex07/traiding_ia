@@ -23,6 +23,7 @@ from rac.orders.repository import OrderRepository
 from rac.notifications.service import AlertService
 from rac.notifications.telegram import TelegramClient
 from rac.portfolio.repository import PortfolioRepository
+from rac.reports.daily import DailyReportService
 from rac.portfolio.service import PortfolioMarkToMarketService
 from rac.risk.manager import RiskManager
 from rac.strategies.models import SignalGenerateRequest
@@ -106,7 +107,25 @@ async def run_cycle(settings: Settings, broker: AlpacaBrokerAdapter, alerts: Ale
     except Exception as exc:
         log.warning("mark_to_market_error: %s", exc)
 
-    # 3. Kill switch — bloquea ejecución de órdenes (reconciliación y MTM ya corrieron)
+    # 3. Reporte diario (una vez al día después de las 21:00 UTC)
+    if alerts.should_send_daily_report():
+        try:
+            report = DailyReportService(portfolio_repo, order_repo).build("paper")
+            alerts.on_daily_report(
+                report_date=report.date,
+                nav=report.nav,
+                pnl_daily=report.pnl_daily,
+                drawdown_pct=report.drawdown_pct,
+                cash=report.cash,
+                positions=report.positions,
+                fills_today=report.fills_today,
+                strategies=settings.watched_strategies,
+            )
+            log.info("daily_report_sent date=%s nav=%.2f pnl=%.2f", report.date, report.nav, report.pnl_daily)
+        except Exception as exc:
+            log.warning("daily_report_error: %s", exc)
+
+    # 4. Kill switch — bloquea ejecución de órdenes (reconciliación y MTM ya corrieron)
     ks_repo = KillSwitchRepository(settings)
     if ks_repo.is_active():
         ks_state = ks_repo.current_state()
@@ -116,7 +135,7 @@ async def run_cycle(settings: Settings, broker: AlpacaBrokerAdapter, alerts: Ale
         return
     alerts.on_kill_switch_reset()
 
-    # 4. Estado de cuenta y posiciones desde Alpaca
+    # 5. Estado de cuenta y posiciones desde Alpaca
     try:
         account = await broker.get_account()
     except Exception as exc:
@@ -135,7 +154,7 @@ async def run_cycle(settings: Settings, broker: AlpacaBrokerAdapter, alerts: Ale
         account.equity, account.cash, len(positions_by_symbol),
     )
 
-    # 5. Ciclo por símbolo: fetch → ingest → features → señales → SL/TP → ejecutar
+    # 6. Ciclo por símbolo: fetch → ingest → features → señales → SL/TP → ejecutar
     for symbol in settings.watched_symbols:
         try:
             await _process_symbol(

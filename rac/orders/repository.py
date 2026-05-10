@@ -204,6 +204,20 @@ class OrderRepository:
                 )
             conn.commit()
 
+    def fills_today(self, environment: str = "paper") -> list[dict[str, object]]:
+        with psycopg.connect(self._database_url, row_factory=dict_row) as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT symbol, side, quantity, price, notional, created_at
+                    FROM fills
+                    WHERE environment = %s AND created_at::date = now()::date
+                    ORDER BY created_at DESC
+                    """,
+                    (environment,),
+                )
+                return [dict(row) for row in cursor.fetchall()]
+
     def latest_orders(self, symbol: str | None = None, limit: int = 100) -> list[dict[str, object]]:
         with psycopg.connect(self._database_url, row_factory=dict_row) as conn:
             with conn.cursor() as cursor:

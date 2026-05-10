@@ -43,6 +43,7 @@ from rac.portfolio.service import PortfolioConsistencyService, PortfolioMarkToMa
 from rac.risk.manager import RiskManager
 from rac.risk.models import RiskDecision, RiskDecisionStatus, RiskEvaluationRequest
 from rac.strategies.models import SignalGenerateRequest, SignalGenerateResult
+from rac.strategies.performance import StrategyPerformanceService
 from rac.strategies.repository import SignalRepository
 from rac.strategies.service import StrategyEngine
 
@@ -577,6 +578,12 @@ async def get_backtest(backtest_id: str) -> dict[str, object]:
     if result is None:
         raise HTTPException(status_code=404, detail="backtest_not_found")
     return result
+
+
+@app.get("/strategies/performance")
+async def strategy_performance(environment: str = "paper") -> list[dict[str, object]]:
+    settings = load_settings()
+    return StrategyPerformanceService(settings).get_performance(environment)
 
 
 @app.post("/risk/evaluate", response_model=RiskDecision)
