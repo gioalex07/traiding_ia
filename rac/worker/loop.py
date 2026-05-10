@@ -68,6 +68,27 @@ def _sl_tp_trigger(
     return None
 
 
+async def _cancel_pending_orders(
+    broker: AlpacaBrokerAdapter,
+    order_repo: OrderRepository,
+) -> list[str]:
+    """Cancel all submitted orders at Alpaca. Returns list of cancelled broker_order_ids."""
+    pending = order_repo.pending_broker_orders()
+    if not pending:
+        return []
+    log.info("kill_switch: cancelling %d pending order(s)", len(pending))
+    cancelled: list[str] = []
+    for order in pending:
+        bid = str(order["broker_order_id"])
+        try:
+            ack = await broker.cancel_order(bid)
+            log.info("cancel_ack broker_order_id=%s status=%s", bid, ack.status)
+            cancelled.append(bid)
+        except Exception as exc:
+            log.warning("cancel_order_error broker_order_id=%s error=%s", bid, exc)
+    return cancelled
+
+
 # --- lógica del ciclo ---
 
 async def run_cycle(settings: Settings, broker: AlpacaBrokerAdapter, alerts: AlertService) -> None:
@@ -130,8 +151,12 @@ async def run_cycle(settings: Settings, broker: AlpacaBrokerAdapter, alerts: Ale
     if ks_repo.is_active():
         ks_state = ks_repo.current_state()
         alerts.on_kill_switch_active(ks_state.reason if ks_state and ks_state.reason else "unknown")
-        log.warning("KILL_SWITCH_ACTIVE — order execution blocked this cycle")
-        _audit(audit, "worker.kill_switch_blocked", settings, {"cycle_skipped": True})
+        log.warning("KILL_SWITCH_ACTIVE — cancelling pending orders and blocking execution")
+        cancelled_ids = await _cancel_pending_orders(broker, order_repo)
+        _audit(audit, "worker.kill_switch_blocked", settings, {
+            "cycle_skipped": True,
+            "orders_cancelled": cancelled_ids,
+        })
         return
     alerts.on_kill_switch_reset()
 

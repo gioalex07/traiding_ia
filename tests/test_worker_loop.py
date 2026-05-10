@@ -1,8 +1,8 @@
 import unittest
 
-from rac.brokers.base import Position
+from rac.brokers.base import CancelAck, Position
 from rac.config import load_settings
-from rac.worker.loop import _skip_reason, _sl_tp_trigger
+from rac.worker.loop import _cancel_pending_orders, _skip_reason, _sl_tp_trigger
 
 
 class SkipReasonTest(unittest.TestCase):
@@ -68,6 +68,48 @@ class SlTpTriggerTest(unittest.TestCase):
 
     def test_only_tp_defined_and_triggered(self) -> None:
         self.assertEqual(_sl_tp_trigger(120.0, stop_loss_price=None, take_profit_price=110.0), "take_profit")
+
+
+class CancelPendingOrdersTest(unittest.IsolatedAsyncioTestCase):
+    class FakeBroker:
+        def __init__(self, raises: bool = False) -> None:
+            self.cancelled: list[str] = []
+            self._raises = raises
+
+        async def cancel_order(self, broker_order_id: str) -> CancelAck:
+            if self._raises:
+                raise RuntimeError("alpaca_http_error:422")
+            self.cancelled.append(broker_order_id)
+            return CancelAck(broker_order_id=broker_order_id, status="cancelled")
+
+    class FakeOrderRepo:
+        def __init__(self, orders: list[dict]) -> None:
+            self._orders = orders
+
+        def pending_broker_orders(self) -> list[dict]:
+            return self._orders
+
+    async def test_no_pending_returns_empty(self) -> None:
+        broker = self.FakeBroker()
+        repo = self.FakeOrderRepo([])
+        result = await _cancel_pending_orders(broker, repo)  # type: ignore[arg-type]
+        self.assertEqual(result, [])
+
+    async def test_cancels_all_pending(self) -> None:
+        broker = self.FakeBroker()
+        repo = self.FakeOrderRepo([
+            {"broker_order_id": "aaa"},
+            {"broker_order_id": "bbb"},
+        ])
+        result = await _cancel_pending_orders(broker, repo)  # type: ignore[arg-type]
+        self.assertEqual(set(result), {"aaa", "bbb"})
+        self.assertEqual(set(broker.cancelled), {"aaa", "bbb"})
+
+    async def test_broker_error_skips_order_gracefully(self) -> None:
+        broker = self.FakeBroker(raises=True)
+        repo = self.FakeOrderRepo([{"broker_order_id": "aaa"}])
+        result = await _cancel_pending_orders(broker, repo)  # type: ignore[arg-type]
+        self.assertEqual(result, [])
 
 
 class SignalConfidenceConfigTest(unittest.TestCase):

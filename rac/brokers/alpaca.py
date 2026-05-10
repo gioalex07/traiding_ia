@@ -153,7 +153,13 @@ class AlpacaBrokerAdapter(BrokerAdapter):
         return dict(payload)
 
     async def cancel_order(self, broker_order_id: str) -> CancelAck:
-        raise NotImplementedError("Alpaca cancel integration is not implemented yet")
+        try:
+            self._delete_request(f"/orders/{broker_order_id}")
+            return CancelAck(broker_order_id=broker_order_id, status="cancelled")
+        except RuntimeError as exc:
+            if ":404" in str(exc):
+                return CancelAck(broker_order_id=broker_order_id, status="not_found")
+            raise
 
     async def stream_fills(self) -> AsyncIterator[FillEvent]:
         if False:
@@ -209,6 +215,28 @@ class AlpacaBrokerAdapter(BrokerAdapter):
             detail = exc.read().decode("utf-8", errors="replace")
             raise RuntimeError(f"alpaca_http_error:{exc.code}:{detail}") from exc
         except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+            raise RuntimeError(f"alpaca_unavailable:{exc.__class__.__name__}") from exc
+
+    def _delete_request(self, path: str) -> None:
+        base_url = os.getenv("ALPACA_PAPER_BASE_URL", "https://paper-api.alpaca.markets").rstrip("/")
+        api_key = os.getenv("ALPACA_API_KEY")
+        api_secret = os.getenv("ALPACA_API_SECRET")
+        if not api_key or not api_secret:
+            raise RuntimeError("alpaca_paper_credentials_missing")
+        request = urllib.request.Request(
+            f"{base_url}{path}",
+            headers={
+                "APCA-API-KEY-ID": api_key,
+                "APCA-API-SECRET-KEY": api_secret,
+            },
+            method="DELETE",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=10):
+                return
+        except urllib.error.HTTPError as exc:
+            raise RuntimeError(f"alpaca_http_error:{exc.code}") from exc
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
             raise RuntimeError(f"alpaca_unavailable:{exc.__class__.__name__}") from exc
 
     def _request_json(self, path: str) -> Any:
