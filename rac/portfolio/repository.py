@@ -122,6 +122,24 @@ class PortfolioRepository:
                 row = cursor.fetchone()
                 return dict(row) if row else None
 
+    def history(self, environment: str = "paper", limit: int = 100) -> list[dict[str, object]]:
+        safe_limit = max(1, min(limit, 1000))
+        with psycopg.connect(self._database_url, row_factory=dict_row) as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT time, environment, nav, cash, pnl_daily, drawdown, exposure
+                    FROM portfolio_snapshots
+                    WHERE environment = %s
+                    ORDER BY time DESC
+                    LIMIT %s
+                    """,
+                    (environment, safe_limit),
+                )
+                rows = [dict(row) for row in cursor.fetchall()]
+                rows.reverse()
+                return rows
+
     def positions(self, environment: str = "paper") -> list[dict[str, object]]:
         with psycopg.connect(self._database_url, row_factory=dict_row) as conn:
             with conn.cursor() as cursor:

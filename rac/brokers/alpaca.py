@@ -180,7 +180,8 @@ class AlpacaBrokerAdapter(BrokerAdapter):
             with urllib.request.urlopen(request, timeout=10) as response:
                 return json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
-            raise RuntimeError(f"alpaca_http_error:{exc.code}") from exc
+            detail = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"alpaca_http_error:{exc.code}:{detail}") from exc
         except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
             raise RuntimeError(f"alpaca_unavailable:{exc.__class__.__name__}") from exc
 

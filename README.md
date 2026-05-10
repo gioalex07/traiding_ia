@@ -42,6 +42,8 @@ Open the local admin dashboard:
 http://localhost:8000/dashboard
 ```
 
+The dashboard shows bot state, Alpaca paper account values, RAC portfolio history, latest signals, latest orders, backtests, local AI status and kill-switch controls. It also includes a paper analysis pipeline that fetches market data, computes features, generates signals and optionally explains the latest signal with Ollama. This pipeline does not execute orders.
+
 Check Alpaca paper read-only connectivity:
 
 ```bash
@@ -150,6 +152,24 @@ Inspect paper portfolio:
 ```bash
 curl "http://localhost:8000/portfolio/positions?environment=paper"
 curl "http://localhost:8000/portfolio/snapshot?environment=paper"
+curl "http://localhost:8000/portfolio/history?environment=paper&limit=100"
+```
+
+Run the read-only paper analysis pipeline:
+
+```bash
+curl -X POST http://localhost:8000/pipeline/paper/run \
+  -H "Content-Type: application/json" \
+  -d '{
+    "symbol": "AAPL",
+    "timeframe": "1Day",
+    "start": "2025-04-01T00:00:00Z",
+    "end": "2025-05-01T23:59:59Z",
+    "strategy_id": "trend_following_v1",
+    "feature_set": "technical_v1",
+    "limit": 300,
+    "explain": false
+  }'
 ```
 
 Inspect local AI and explain a signal with Ollama when available:

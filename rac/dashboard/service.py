@@ -26,6 +26,7 @@ class DashboardService:
             "broker_account": await self._safe_async(lambda: broker.get_account()),
             "broker_positions": await self._safe_async(lambda: broker.get_positions()),
             "portfolio_snapshot": self._safe(lambda: portfolio.latest_snapshot("paper") or {}),
+            "portfolio_history": self._safe(lambda: portfolio.history("paper", limit=100)),
             "portfolio_positions": self._safe(lambda: portfolio.positions("paper")),
             "orders": self._safe(lambda: OrderRepository(self.settings).latest_orders(limit=10)),
             "signals": self._safe(lambda: SignalRepository(self.settings).latest_all(limit=10)),
@@ -57,4 +58,3 @@ class DashboardService:
         if isinstance(value, dict):
             return {str(k): DashboardService._to_plain(v) for k, v in value.items()}
         return value
-

@@ -35,6 +35,8 @@ from rac.orders.executor import PaperOrderExecutor
 from rac.orders.models import ExecuteSignalRequest, OrderExecutionResult
 from rac.orders.reconciliation import ReconciliationResult, ReconciliationService
 from rac.orders.repository import OrderRepository
+from rac.pipeline.models import PaperPipelineRequest, PaperPipelineResult
+from rac.pipeline.service import PaperAnalysisPipeline
 from rac.portfolio.repository import PortfolioRepository
 from rac.risk.manager import RiskManager
 from rac.risk.models import RiskDecision, RiskEvaluationRequest
@@ -396,6 +398,26 @@ async def portfolio_positions(environment: str = "paper") -> list[dict[str, obje
         return PortfolioRepository(settings).positions(environment=environment)
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"portfolio_unavailable:{exc.__class__.__name__}") from exc
+
+
+@app.get("/portfolio/history")
+async def portfolio_history(environment: str = "paper", limit: int = 100) -> list[dict[str, object]]:
+    settings = load_settings()
+    try:
+        return PortfolioRepository(settings).history(environment=environment, limit=limit)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"portfolio_unavailable:{exc.__class__.__name__}") from exc
+
+
+@app.post("/pipeline/paper/run", response_model=PaperPipelineResult)
+async def run_paper_pipeline(request: PaperPipelineRequest) -> PaperPipelineResult:
+    settings = load_settings()
+    try:
+        return await PaperAnalysisPipeline(settings).run(request)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"paper_pipeline_unavailable:{exc}") from exc
 
 
 @app.get("/ai/capabilities", response_model=LocalAICapabilities)

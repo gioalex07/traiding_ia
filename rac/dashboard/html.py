@@ -101,6 +101,36 @@ DASHBOARD_HTML = """
     }
     button.danger { color: #fff; background: var(--bad); border-color: var(--bad); }
     button.secondary { color: var(--ink); background: #eef2f7; }
+    input, select {
+      width: 100%;
+      min-height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 7px 9px;
+      color: var(--text);
+      background: #fff;
+      font: inherit;
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 1fr 1fr auto;
+      gap: 10px;
+      align-items: end;
+    }
+    .field { display: grid; gap: 5px; min-width: 0; }
+    .pipeline-result {
+      margin-top: 12px;
+      border-top: 1px solid var(--line);
+      padding-top: 12px;
+    }
+    canvas {
+      width: 100%;
+      height: 220px;
+      display: block;
+      border: 1px solid #edf0f5;
+      border-radius: 6px;
+      background: #fff;
+    }
     pre {
       white-space: pre-wrap;
       overflow-wrap: anywhere;
@@ -112,6 +142,7 @@ DASHBOARD_HTML = """
     .muted { color: var(--muted); }
     @media (max-width: 1000px) {
       .span-3, .span-4, .span-6, .span-8 { grid-column: span 12; }
+      .form-grid { grid-template-columns: 1fr; }
       header { align-items: flex-start; flex-direction: column; }
     }
   </style>
@@ -140,6 +171,23 @@ DASHBOARD_HTML = """
       <section class="panel span-4"><h2>RAC Positions</h2><div class="content" id="portfolio-positions"></div></section>
       <section class="panel span-4"><h2>Broker Positions</h2><div class="content" id="broker-positions"></div></section>
 
+      <section class="panel span-12">
+        <h2>Paper Analysis Pipeline</h2>
+        <div class="content">
+          <div class="form-grid">
+            <label class="field"><span class="label">Symbol</span><input id="pipeline-symbol" value="AAPL" autocomplete="off"></label>
+            <label class="field"><span class="label">Timeframe</span><input id="pipeline-timeframe" value="1Day" autocomplete="off"></label>
+            <label class="field"><span class="label">Strategy</span><select id="pipeline-strategy"><option value="trend_following_v1">trend_following_v1</option><option value="mean_reversion_v1">mean_reversion_v1</option></select></label>
+            <label class="field"><span class="label">Start</span><input id="pipeline-start" type="date"></label>
+            <label class="field"><span class="label">End</span><input id="pipeline-end" type="date"></label>
+            <button class="secondary" onclick="runPipeline()">Run</button>
+          </div>
+          <div class="pipeline-result" id="pipeline-result"><span class="muted">No run in this session</span></div>
+        </div>
+      </section>
+
+      <section class="panel span-12"><h2>NAV History</h2><div class="content"><canvas id="nav-chart"></canvas></div></section>
+
       <section class="panel span-6"><h2>Latest Signals</h2><div class="content" id="signals"></div></section>
       <section class="panel span-6"><h2>Latest Orders</h2><div class="content" id="orders"></div></section>
       <section class="panel span-12"><h2>Backtests</h2><div class="content" id="backtests"></div></section>
@@ -156,6 +204,11 @@ DASHBOARD_HTML = """
       if (!Number.isFinite(n)) return "-";
       return n.toLocaleString(undefined, { maximumFractionDigits: 6 });
     };
+    function isoDate(daysAgo) {
+      const d = new Date();
+      d.setDate(d.getDate() - daysAgo);
+      return d.toISOString().slice(0, 10);
+    }
     const unwrap = section => section && section.ok ? section.data : null;
     const error = section => section && !section.ok ? `<span class="error">${section.error}</span>` : `<span class="muted">No data</span>`;
     const statusClass = value => value === true || value === "available" || value === "paper_configured" ? "good" : value ? "warn" : "bad";
@@ -174,6 +227,7 @@ DASHBOARD_HTML = """
       const account = unwrap(data.broker_account);
       const brokerPositions = unwrap(data.broker_positions);
       const snapshot = unwrap(data.portfolio_snapshot);
+      const portfolioHistory = unwrap(data.portfolio_history);
       const racPositions = unwrap(data.portfolio_positions);
       const orders = unwrap(data.orders);
       const signals = unwrap(data.signals);
@@ -213,7 +267,85 @@ DASHBOARD_HTML = """
         { label: "ID", key: "id" }, { label: "Symbol", key: "symbol" },
         { label: "Strategy", key: "strategy_id" }, { label: "Created", key: "created_at" }
       ]);
+      drawNavChart(portfolioHistory || []);
       document.getElementById("last-refresh").textContent = new Date().toLocaleTimeString();
+    }
+    async function runPipeline() {
+      const resultEl = document.getElementById("pipeline-result");
+      resultEl.innerHTML = '<span class="muted">Running paper analysis...</span>';
+      const payload = {
+        symbol: document.getElementById("pipeline-symbol").value.trim().toUpperCase(),
+        timeframe: document.getElementById("pipeline-timeframe").value.trim(),
+        strategy_id: document.getElementById("pipeline-strategy").value,
+        start: `${document.getElementById("pipeline-start").value}T00:00:00Z`,
+        end: `${document.getElementById("pipeline-end").value}T23:59:59Z`,
+        feature_set: "technical_v1",
+        limit: 300,
+        explain: true
+      };
+      try {
+        const response = await fetch("/pipeline/paper/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || response.statusText);
+        resultEl.innerHTML = `
+          <div class="metric"><span class="value">${data.latest_signal_direction || "no signal"}</span><span class="label">${data.symbol} ${data.timeframe} / fetched ${data.fetched}, accepted ${data.accepted}, features ${data.features_computed}, signals ${data.signals_generated}</span></div>
+          <pre>${data.ai_explanation || `AI status: ${data.ai_status || "not_requested"}`}</pre>
+        `;
+        refresh();
+      } catch (err) {
+        resultEl.innerHTML = `<span class="error">${err.message}</span>`;
+      }
+    }
+    function drawNavChart(points) {
+      const canvas = document.getElementById("nav-chart");
+      const rect = canvas.getBoundingClientRect();
+      const scale = window.devicePixelRatio || 1;
+      canvas.width = Math.max(300, Math.floor(rect.width * scale));
+      canvas.height = Math.max(180, Math.floor(rect.height * scale));
+      const ctx = canvas.getContext("2d");
+      ctx.scale(scale, scale);
+      const width = canvas.width / scale;
+      const height = canvas.height / scale;
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, width, height);
+      const values = (points || []).map(p => Number(p.nav)).filter(Number.isFinite);
+      if (values.length < 2) {
+        ctx.fillStyle = "#667085";
+        ctx.font = "13px system-ui";
+        ctx.fillText("No NAV history yet", 16, 28);
+        return;
+      }
+      const pad = 28;
+      const min = Math.min(...values);
+      const max = Math.max(...values);
+      const range = max === min ? 1 : max - min;
+      ctx.strokeStyle = "#d8dee8";
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 4; i++) {
+        const y = pad + i * ((height - pad * 2) / 3);
+        ctx.beginPath();
+        ctx.moveTo(pad, y);
+        ctx.lineTo(width - pad, y);
+        ctx.stroke();
+      }
+      ctx.strokeStyle = "#0f766e";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      values.forEach((value, index) => {
+        const x = pad + (index / (values.length - 1)) * (width - pad * 2);
+        const y = height - pad - ((value - min) / range) * (height - pad * 2);
+        if (index === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      ctx.fillStyle = "#263241";
+      ctx.font = "12px system-ui";
+      ctx.fillText(fmtMoney(values[values.length - 1]), pad, 18);
     }
     async function activateKillSwitch() {
       const reason = prompt("Reason");
@@ -227,8 +359,11 @@ DASHBOARD_HTML = """
       await fetch("/admin/kill-switch/reset", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason, actor: "dashboard" }) });
       refresh();
     }
+    document.getElementById("pipeline-start").value = isoDate(45);
+    document.getElementById("pipeline-end").value = isoDate(1);
     refresh();
     setInterval(refresh, 15000);
+    window.addEventListener("resize", () => refresh());
   </script>
 </body>
 </html>
