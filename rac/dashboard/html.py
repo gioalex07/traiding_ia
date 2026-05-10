@@ -157,6 +157,7 @@ DASHBOARD_HTML = """
       <span id="last-refresh" class="sub"></span>
       <button class="secondary" onclick="refresh()">Refresh</button>
       <button class="secondary" onclick="markToMarket()">Mark to Market</button>
+      <button class="secondary" onclick="checkConsistency()">Check Consistency</button>
       <button class="secondary" onclick="reconcileOrders()">Reconcile Orders</button>
       <button class="danger" onclick="activateKillSwitch()">Kill Switch</button>
       <button onclick="resetKillSwitch()">Reset</button>
@@ -209,6 +210,12 @@ DASHBOARD_HTML = """
         <h2>Mark to Market</h2>
         <div class="content" id="mark-to-market">
           <span class="muted">Run to update NAV from latest available prices</span>
+        </div>
+      </section>
+      <section class="panel span-12">
+        <h2>Portfolio Consistency</h2>
+        <div class="content" id="portfolio-consistency">
+          <span class="muted">Checking RAC positions against Alpaca</span>
         </div>
       </section>
       <section class="panel span-12">
@@ -298,6 +305,7 @@ DASHBOARD_HTML = """
       const snapshot = unwrap(data.portfolio_snapshot);
       const portfolioHistory = unwrap(data.portfolio_history);
       const racPositions = unwrap(data.portfolio_positions);
+      const consistency = unwrap(data.portfolio_consistency);
       const orders = unwrap(data.orders);
       const signals = unwrap(data.signals);
       const backtests = unwrap(data.backtests);
@@ -343,8 +351,40 @@ DASHBOARD_HTML = """
         { label: "ID", key: "id" }, { label: "Symbol", key: "symbol" },
         { label: "Strategy", key: "strategy_id" }, { label: "Created", key: "created_at" }
       ]);
+      if (consistency) {
+        renderConsistency(consistency);
+      } else {
+        document.getElementById("portfolio-consistency").innerHTML = error(data.portfolio_consistency);
+      }
       drawNavChart(portfolioHistory || []);
       document.getElementById("last-refresh").textContent = new Date().toLocaleTimeString();
+    }
+    function renderConsistency(data) {
+      const className = data.status === "ok" ? "good" : data.status === "degraded" ? "warn" : "bad";
+      document.getElementById("portfolio-consistency").innerHTML = `
+        <span class="status ${className}">${data.status}</span>
+        <div class="label">order gate ${data.block_order_execution ? "blocked" : "open"}</div>
+        ${rows(data.diffs, [
+          { label: "Symbol", key: "symbol" },
+          { label: "Severity", key: "severity" },
+          { label: "RAC Qty", render: x => fmtNum(x.rac_quantity) },
+          { label: "Broker Qty", render: x => fmtNum(x.broker_quantity) },
+          { label: "Qty Diff", render: x => fmtNum(x.quantity_diff) },
+          { label: "Reasons", render: x => (x.reasons || []).join(", ") || "-" }
+        ])}
+      `;
+    }
+    async function checkConsistency() {
+      const resultEl = document.getElementById("portfolio-consistency");
+      resultEl.innerHTML = '<span class="muted">Checking portfolio consistency...</span>';
+      try {
+        const response = await fetch("/portfolio/consistency?environment=paper", { cache: "no-store" });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || response.statusText);
+        renderConsistency(data);
+      } catch (err) {
+        resultEl.innerHTML = `<span class="error">${err.message}</span>`;
+      }
     }
     async function markToMarket() {
       const resultEl = document.getElementById("mark-to-market");

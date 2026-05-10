@@ -1,8 +1,9 @@
 import unittest
 from dataclasses import dataclass
 
+from rac.brokers.base import Position
 from rac.config import load_settings
-from rac.portfolio.service import PortfolioMarkToMarketService
+from rac.portfolio.service import PortfolioConsistencyService, PortfolioMarkToMarketService
 
 
 @dataclass(frozen=True)
@@ -13,6 +14,9 @@ class FakeBar:
 class FakeBroker:
     async def get_latest_bars(self, symbol: str, timeframe: str, limit: int = 1) -> list[FakeBar]:
         return [FakeBar(close=110.0)]
+
+    async def get_positions(self) -> list[Position]:
+        return [Position(symbol="AAPL", quantity=2.0, market_value=200.0)]
 
 
 class FakePortfolioRepository:
@@ -50,6 +54,31 @@ class PortfolioMarkToMarketServiceTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.positions_value, 220.0)
         self.assertEqual(result.positions[0].unrealized_pnl, 20.0)
         self.assertIsNotNone(repository.recorded)
+
+    async def test_consistency_ok_when_quantities_match(self) -> None:
+        result = await PortfolioConsistencyService(
+            repository=FakePortfolioRepository(),  # type: ignore[arg-type]
+            broker=FakeBroker(),  # type: ignore[arg-type]
+        ).check(environment="paper")
+
+        self.assertEqual(result.status, "ok")
+        self.assertFalse(result.block_order_execution)
+        self.assertEqual(result.diffs, [])
+
+    async def test_consistency_blocks_missing_broker_position(self) -> None:
+        class EmptyBroker(FakeBroker):
+            async def get_positions(self) -> list[Position]:
+                return []
+
+        result = await PortfolioConsistencyService(
+            repository=FakePortfolioRepository(),  # type: ignore[arg-type]
+            broker=EmptyBroker(),  # type: ignore[arg-type]
+        ).check(environment="paper")
+
+        self.assertEqual(result.status, "blocked")
+        self.assertTrue(result.block_order_execution)
+        self.assertEqual(result.diffs[0].symbol, "AAPL")
+        self.assertIn("missing_in_broker", result.diffs[0].reasons)
 
 
 if __name__ == "__main__":

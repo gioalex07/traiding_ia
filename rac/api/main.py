@@ -32,16 +32,16 @@ from rac.market_data.models import (
 from rac.market_data.repository import MarketDataRepository
 from rac.market_data.service import MarketDataIngestor
 from rac.orders.executor import PaperOrderExecutor
-from rac.orders.models import ExecuteSignalRequest, OrderExecutionResult
+from rac.orders.models import ExecuteSignalRequest, OrderExecutionResult, OrderStatus
 from rac.orders.reconciliation import ReconciliationResult, ReconciliationService
 from rac.orders.repository import OrderRepository
 from rac.pipeline.models import PaperPipelineRequest, PaperPipelineResult
 from rac.pipeline.service import PaperAnalysisPipeline
-from rac.portfolio.models import MarkToMarketResult
+from rac.portfolio.models import MarkToMarketResult, PortfolioConsistencyResult
 from rac.portfolio.repository import PortfolioRepository
-from rac.portfolio.service import PortfolioMarkToMarketService
+from rac.portfolio.service import PortfolioConsistencyService, PortfolioMarkToMarketService
 from rac.risk.manager import RiskManager
-from rac.risk.models import RiskDecision, RiskEvaluationRequest
+from rac.risk.models import RiskDecision, RiskDecisionStatus, RiskEvaluationRequest
 from rac.strategies.models import SignalGenerateRequest, SignalGenerateResult
 from rac.strategies.repository import SignalRepository
 from rac.strategies.service import StrategyEngine
@@ -321,6 +321,33 @@ async def latest_signals(symbol: str, timeframe: str, limit: int = 100) -> list[
 async def execute_signal(request: ExecuteSignalRequest) -> OrderExecutionResult:
     settings = load_settings()
     try:
+        broker = AlpacaBrokerAdapter(settings)
+        consistency = await PortfolioConsistencyService(
+            repository=PortfolioRepository(settings),
+            broker=broker,
+        ).check(environment="paper")
+        if consistency.block_order_execution:
+            decision = RiskDecision(
+                status=RiskDecisionStatus.REJECTED,
+                approved=False,
+                reasons=["portfolio_consistency_block"],
+                max_notional_allowed=0,
+                requested_notional=0,
+            )
+            AuditRepository(settings).record_event(
+                event_type="portfolio.consistency_block",
+                environment=settings.trading_mode.value,
+                correlation_id=request.signal_id,
+                actor="portfolio-manager",
+                payload=consistency.model_dump(),
+            )
+            return OrderExecutionResult(
+                status=OrderStatus.REJECTED,
+                order_id=None,
+                signal_id=request.signal_id,
+                risk_decision=decision,
+                reason="portfolio_consistency_block",
+            )
         kill_switch = KillSwitchRepository(settings).current_state()
         effective_request = request.model_copy(update={"kill_switch_active": kill_switch.active})
         result = await PaperOrderExecutor(
@@ -329,7 +356,7 @@ async def execute_signal(request: ExecuteSignalRequest) -> OrderExecutionResult:
             order_repository=OrderRepository(settings),
             portfolio_repository=PortfolioRepository(settings),
             risk_manager=RiskManager(settings),
-            broker_adapter=AlpacaBrokerAdapter(settings),
+            broker_adapter=broker,
         ).execute_signal(effective_request)
         audit = AuditRepository(settings)
         audit.record_event(
@@ -414,6 +441,34 @@ async def portfolio_history(environment: str = "paper", limit: int = 100) -> lis
         return PortfolioRepository(settings).history(environment=environment, limit=limit)
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"portfolio_unavailable:{exc.__class__.__name__}") from exc
+
+
+@app.get("/portfolio/consistency", response_model=PortfolioConsistencyResult)
+async def portfolio_consistency(
+    environment: str = "paper",
+    quantity_tolerance: float = 0.000001,
+    market_value_tolerance: float = 1.0,
+) -> PortfolioConsistencyResult:
+    settings = load_settings()
+    try:
+        result = await PortfolioConsistencyService(
+            repository=PortfolioRepository(settings),
+            broker=AlpacaBrokerAdapter(settings),
+        ).check(
+            environment=environment,
+            quantity_tolerance=quantity_tolerance,
+            market_value_tolerance=market_value_tolerance,
+        )
+        AuditRepository(settings).record_event(
+            event_type="portfolio.consistency_checked",
+            environment=environment,
+            correlation_id=f"portfolio-consistency:{environment}",
+            actor="portfolio-manager",
+            payload=result.model_dump(),
+        )
+        return result
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"portfolio_consistency_unavailable:{exc}") from exc
 
 
 @app.post("/portfolio/mark-to-market", response_model=MarkToMarketResult)

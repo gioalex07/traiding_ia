@@ -19,3 +19,24 @@ class MarkToMarketResult(BaseModel):
     positions_value: float
     positions: list[MarkToMarketPosition]
     errors: list[str]
+
+
+class PortfolioConsistencyDiff(BaseModel):
+    symbol: str
+    rac_quantity: float
+    broker_quantity: float
+    quantity_diff: float
+    rac_market_value: float
+    broker_market_value: float
+    market_value_diff: float
+    severity: str
+    reasons: list[str]
+
+
+class PortfolioConsistencyResult(BaseModel):
+    status: str
+    environment: str
+    quantity_tolerance: float
+    market_value_tolerance: float
+    diffs: list[PortfolioConsistencyDiff]
+    block_order_execution: bool

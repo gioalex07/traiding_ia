@@ -9,6 +9,7 @@ from rac.discovery.service import EnvironmentDiscoveryService
 from rac.local_ai.service import LocalAIService
 from rac.orders.repository import OrderRepository
 from rac.portfolio.repository import PortfolioRepository
+from rac.portfolio.service import PortfolioConsistencyService
 from rac.strategies.repository import SignalRepository
 
 
@@ -28,6 +29,9 @@ class DashboardService:
             "portfolio_snapshot": self._safe(lambda: portfolio.latest_snapshot("paper") or {}),
             "portfolio_history": self._safe(lambda: portfolio.history("paper", limit=100)),
             "portfolio_positions": self._safe(lambda: portfolio.positions("paper")),
+            "portfolio_consistency": await self._safe_async(
+                lambda: PortfolioConsistencyService(portfolio, broker).check(environment="paper")
+            ),
             "orders": self._safe(lambda: OrderRepository(self.settings).latest_orders(limit=10)),
             "signals": self._safe(lambda: SignalRepository(self.settings).latest_all(limit=10)),
             "backtests": self._safe(lambda: BacktestRepository(self.settings).list_recent(5)),

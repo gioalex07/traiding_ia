@@ -154,6 +154,7 @@ Inspect paper portfolio:
 curl "http://localhost:8000/portfolio/positions?environment=paper"
 curl "http://localhost:8000/portfolio/snapshot?environment=paper"
 curl "http://localhost:8000/portfolio/history?environment=paper&limit=100"
+curl "http://localhost:8000/portfolio/consistency?environment=paper"
 curl -X POST "http://localhost:8000/portfolio/mark-to-market?environment=paper&timeframe=1Day"
 ```
 
