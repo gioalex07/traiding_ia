@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from rac.orders.repository import OrderRepository
 from rac.portfolio.repository import PortfolioRepository
@@ -34,10 +34,10 @@ class DailyReportService:
 
         return DailyReport(
             date=datetime.now(UTC).strftime("%Y-%m-%d"),
-            nav=float(snapshot.get("nav") or 0),
-            pnl_daily=float(snapshot.get("pnl_daily") or 0),
-            drawdown_pct=float(snapshot.get("drawdown") or 0),
-            cash=float(snapshot.get("cash") or 0),
+            nav=float(cast(Any, snapshot.get("nav")) or 0),
+            pnl_daily=float(cast(Any, snapshot.get("pnl_daily")) or 0),
+            drawdown_pct=float(cast(Any, snapshot.get("drawdown")) or 0),
+            cash=float(cast(Any, snapshot.get("cash")) or 0),
             positions=[dict(p) for p in positions],
             fills_today=[dict(f) for f in fills],
         )
