@@ -21,6 +21,7 @@ from rac.orders.models import ExecuteSignalRequest
 from rac.orders.reconciliation import ReconciliationService
 from rac.orders.repository import OrderRepository
 from rac.portfolio.repository import PortfolioRepository
+from rac.portfolio.service import PortfolioMarkToMarketService
 from rac.risk.manager import RiskManager
 from rac.strategies.models import SignalGenerateRequest
 from rac.strategies.repository import SignalRepository
@@ -86,13 +87,26 @@ async def run_cycle(settings: Settings, broker: AlpacaBrokerAdapter) -> None:
     except Exception as exc:
         log.warning("reconcile_error: %s", exc)
 
-    # 2. Kill switch — bloquea ejecución de órdenes (reconciliación ya corrió)
+    # 2. Mark to market — actualiza NAV paper con precios recientes (incluye pnl_daily)
+    try:
+        mtm = await PortfolioMarkToMarketService(settings, portfolio_repo, broker).run(
+            environment="paper",
+            timeframe="1Day",
+        )
+        log.info(
+            "mark_to_market nav=%.2f positions_value=%.2f errors=%d",
+            mtm.nav, mtm.positions_value, len(mtm.errors),
+        )
+    except Exception as exc:
+        log.warning("mark_to_market_error: %s", exc)
+
+    # 3. Kill switch — bloquea ejecución de órdenes (reconciliación y MTM ya corrieron)
     if KillSwitchRepository(settings).is_active():
         log.warning("KILL_SWITCH_ACTIVE — order execution blocked this cycle")
         _audit(audit, "worker.kill_switch_blocked", settings, {"cycle_skipped": True})
         return
 
-    # 3. Estado de cuenta y posiciones desde Alpaca
+    # 4. Estado de cuenta y posiciones desde Alpaca
     try:
         account = await broker.get_account()
     except Exception as exc:
@@ -111,7 +125,7 @@ async def run_cycle(settings: Settings, broker: AlpacaBrokerAdapter) -> None:
         account.equity, account.cash, len(positions_by_symbol),
     )
 
-    # 3. Ciclo por símbolo: fetch → ingest → features → señales → SL/TP → ejecutar
+    # 5. Ciclo por símbolo: fetch → ingest → features → señales → SL/TP → ejecutar
     for symbol in settings.watched_symbols:
         try:
             await _process_symbol(

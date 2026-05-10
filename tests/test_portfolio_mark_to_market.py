@@ -1,8 +1,10 @@
 import unittest
 from dataclasses import dataclass
+from decimal import Decimal
 
 from rac.brokers.base import Position
 from rac.config import load_settings
+from rac.portfolio.repository import _daily_pnl
 from rac.portfolio.service import PortfolioConsistencyService, PortfolioMarkToMarketService
 
 
@@ -79,6 +81,39 @@ class PortfolioMarkToMarketServiceTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result.block_order_execution)
         self.assertEqual(result.diffs[0].symbol, "AAPL")
         self.assertIn("missing_in_broker", result.diffs[0].reasons)
+
+
+class DailyPnlTest(unittest.TestCase):
+    """Tests for _daily_pnl — uses a fake cursor to avoid DB dependency."""
+
+    def _cursor(self, baseline_nav: float | None) -> object:
+        class FakeCursor:
+            def __init__(self, nav: float | None) -> None:
+                self._nav = nav
+
+            def execute(self, *_: object, **__: object) -> None:
+                pass
+
+            def fetchone(self) -> tuple | None:
+                return (self._nav,) if self._nav is not None else None
+
+        return FakeCursor(baseline_nav)
+
+    def test_no_prior_snapshot_returns_zero(self) -> None:
+        result = _daily_pnl(self._cursor(None), "paper", Decimal("100000"))
+        self.assertEqual(result, Decimal("0"))
+
+    def test_gain_day(self) -> None:
+        result = _daily_pnl(self._cursor(100_000.0), "paper", Decimal("101500"))
+        self.assertEqual(result, Decimal("1500"))
+
+    def test_loss_day(self) -> None:
+        result = _daily_pnl(self._cursor(100_000.0), "paper", Decimal("98000"))
+        self.assertEqual(result, Decimal("-2000"))
+
+    def test_flat_day(self) -> None:
+        result = _daily_pnl(self._cursor(100_000.0), "paper", Decimal("100000"))
+        self.assertEqual(result, Decimal("0"))
 
 
 if __name__ == "__main__":

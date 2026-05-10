@@ -1,10 +1,29 @@
 import json
 from decimal import Decimal
+from typing import Any
 
 import psycopg
 from psycopg.rows import dict_row
 
 from rac.config import Settings
+
+
+def _daily_pnl(cursor: Any, environment: str, current_nav: Decimal) -> Decimal:
+    """Returns today's P&L vs the last snapshot recorded before today (UTC midnight)."""
+    cursor.execute(
+        """
+        SELECT nav FROM portfolio_snapshots
+        WHERE environment = %s
+          AND time < now()::date
+        ORDER BY time DESC
+        LIMIT 1
+        """,
+        (environment,),
+    )
+    row = cursor.fetchone()
+    if row is None:
+        return Decimal("0")
+    return current_nav - Decimal(str(row[0]))
 
 
 class PortfolioRepository:
@@ -77,17 +96,19 @@ class PortfolioRepository:
                 positions_value = Decimal(cursor.fetchone()[0])
                 cash = Decimal(str(starting_cash)) + cash_delta
                 nav = cash + positions_value
+                pnl_daily = _daily_pnl(cursor, environment, nav)
                 cursor.execute(
                     """
                     INSERT INTO portfolio_snapshots (
                         time, environment, nav, cash, pnl_daily, drawdown, exposure
                     )
-                    VALUES (now(), %s, %s, %s, 0, 0, %s::jsonb)
+                    VALUES (now(), %s, %s, %s, %s, 0, %s::jsonb)
                     """,
                     (
                         environment,
                         nav,
                         cash,
+                        pnl_daily,
                         '{"positions_value": "' + str(positions_value) + '"}',
                     ),
                 )
@@ -166,6 +187,7 @@ class PortfolioRepository:
                         (market_value, environment, str(valuation["symbol"]).upper()),
                     )
                 nav = cash_decimal + positions_value
+                pnl_daily = _daily_pnl(cursor, environment, nav)
                 exposure = {
                     "source": source,
                     "positions_value": str(positions_value),
@@ -180,9 +202,9 @@ class PortfolioRepository:
                     INSERT INTO portfolio_snapshots (
                         time, environment, nav, cash, pnl_daily, drawdown, exposure
                     )
-                    VALUES (now(), %s, %s, %s, 0, 0, %s::jsonb)
+                    VALUES (now(), %s, %s, %s, %s, 0, %s::jsonb)
                     """,
-                    (environment, nav, cash_decimal, json.dumps(exposure)),
+                    (environment, nav, cash_decimal, pnl_daily, json.dumps(exposure)),
                 )
             conn.commit()
 
