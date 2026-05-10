@@ -1,5 +1,5 @@
-import unittest
 from datetime import UTC, datetime
+import unittest
 
 from rac.notifications.service import AlertService
 from rac.reports.daily import DailyReport, DailyReportService
