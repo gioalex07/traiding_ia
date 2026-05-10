@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from rac.admin.kill_switch import KillSwitchRepository
+from rac.admin.worker_config import WorkerConfigRepository
 from rac.audit.repository import AuditRepository
 from rac.brokers.alpaca import AlpacaBrokerAdapter
 from rac.brokers.base import OrderRequest, Position
@@ -99,6 +100,15 @@ async def run_cycle(settings: Settings, broker: AlpacaBrokerAdapter, alerts: Ale
     portfolio_repo = PortfolioRepository(settings)
     audit = AuditRepository(settings)
 
+    # Lee config dinámica desde DB (permite cambios sin reiniciar el worker)
+    try:
+        dyn = WorkerConfigRepository(settings)
+        min_confidence = dyn.effective_confidence(settings.min_signal_confidence)
+        watched_symbols = dyn.effective_symbols(settings.watched_symbols)
+    except Exception:
+        min_confidence = settings.min_signal_confidence
+        watched_symbols = settings.watched_symbols
+
     # 1. Reconciliar órdenes pendientes
     try:
         recon = await ReconciliationService(broker, order_repo, portfolio_repo, alerts).reconcile_pending()
@@ -180,7 +190,7 @@ async def run_cycle(settings: Settings, broker: AlpacaBrokerAdapter, alerts: Ale
     )
 
     # 6. Ciclo por símbolo: fetch → ingest → features → señales → SL/TP → ejecutar
-    for symbol in settings.watched_symbols:
+    for symbol in watched_symbols:
         try:
             await _process_symbol(
                 settings=settings,
@@ -195,6 +205,7 @@ async def run_cycle(settings: Settings, broker: AlpacaBrokerAdapter, alerts: Ale
                 portfolio_equity=account.equity,
                 portfolio_cash=account.cash,
                 position=positions_by_symbol.get(symbol.upper()),
+                min_confidence=min_confidence,
             )
         except Exception as exc:
             log.error("symbol_error symbol=%s error=%s", symbol, exc)
@@ -214,6 +225,7 @@ async def _process_symbol(
     portfolio_equity: float,
     portfolio_cash: float,
     position: Position | None,
+    min_confidence: float,
 ) -> None:
     timeframe = settings.watched_timeframe
 
@@ -264,10 +276,10 @@ async def _process_symbol(
             continue
 
         confidence = float(signal["confidence"])
-        if confidence < settings.min_signal_confidence:
+        if confidence < min_confidence:
             log.info(
                 "low_confidence symbol=%s strategy=%s direction=%s confidence=%.4f threshold=%.2f",
-                symbol, strategy_id, direction, confidence, settings.min_signal_confidence,
+                symbol, strategy_id, direction, confidence, min_confidence,
             )
             continue
 

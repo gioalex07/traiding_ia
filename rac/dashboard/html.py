@@ -272,6 +272,23 @@ DASHBOARD_HTML = """
       </section>
 
       <section class="panel span-12">
+        <h2>Worker Config <span class="label" style="font-weight:normal">— applies next cycle</span></h2>
+        <div class="content">
+          <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr auto">
+            <label class="field">
+              <span class="label">Min Signal Confidence (0–1)</span>
+              <input id="cfg-confidence" type="number" min="0" max="1" step="0.05" value="0.6">
+            </label>
+            <label class="field" style="grid-column:span 2">
+              <span class="label">Watched Symbols (comma-separated)</span>
+              <input id="cfg-symbols" value="AAPL,MSFT,SPY" autocomplete="off">
+            </label>
+            <button class="secondary" onclick="saveWorkerConfig()">Save</button>
+          </div>
+          <div id="cfg-result" style="margin-top:8px"></div>
+        </div>
+      </section>
+      <section class="panel span-12">
         <h2>Audit Trail</h2>
         <div class="content" id="audit-trail"><span class="muted">Loading...</span></div>
       </section>
@@ -316,6 +333,46 @@ DASHBOARD_HTML = """
         }).join("")}</tr>`).join("") +
         `</tbody></table>`;
     }
+    async function loadWorkerConfig() {
+      try {
+        const resp = await fetch("/admin/worker-config", { cache: "no-store" });
+        const data = await resp.json();
+        for (const item of data) {
+          if (item.key === "min_signal_confidence") {
+            document.getElementById("cfg-confidence").value = item.value;
+          }
+          if (item.key === "watched_symbols") {
+            document.getElementById("cfg-symbols").value = item.value;
+          }
+        }
+      } catch (_) {}
+    }
+    async function saveWorkerConfig() {
+      const confidence = document.getElementById("cfg-confidence").value.trim();
+      const symbols    = document.getElementById("cfg-symbols").value.trim();
+      const resultEl   = document.getElementById("cfg-result");
+      if (!confidence || !symbols) {
+        resultEl.innerHTML = '<span class="error">Both fields are required</span>';
+        return;
+      }
+      try {
+        await Promise.all([
+          fetch("/admin/worker-config/min_signal_confidence", {
+            method: "PUT", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ value: confidence, actor: "dashboard" }),
+          }),
+          fetch("/admin/worker-config/watched_symbols", {
+            method: "PUT", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ value: symbols, actor: "dashboard" }),
+          }),
+        ]);
+        resultEl.innerHTML = '<span style="color:var(--good)">Saved — applies on next worker cycle</span>';
+        setTimeout(() => { resultEl.innerHTML = ""; }, 4000);
+      } catch (e) {
+        resultEl.innerHTML = `<span class="error">${e.message}</span>`;
+      }
+    }
+
     async function loadAuditTrail() {
       try {
         const resp = await fetch("/audit/events?environment=paper&limit=20", { cache: "no-store" });
@@ -443,6 +500,7 @@ DASHBOARD_HTML = """
       drawNavChart(portfolioHistory || []);
       document.getElementById("last-refresh").textContent = new Date().toLocaleTimeString();
       loadFills();
+      loadWorkerConfig();
       loadAuditTrail();
       loadStrategyPerformance();
     }

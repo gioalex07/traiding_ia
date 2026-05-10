@@ -5,6 +5,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from rac.admin.kill_switch import KillSwitchActivateRequest, KillSwitchRepository, KillSwitchState
+from rac.admin.worker_config import WorkerConfigRepository
 from rac.audit.repository import AuditRepository
 from rac.backtest.engine import BacktestEngine
 from rac.backtest.models import BacktestRequest, BacktestResult
@@ -584,6 +585,23 @@ async def get_backtest(backtest_id: str) -> dict[str, object]:
 async def portfolio_fills(environment: str = "paper", days: int = 7) -> list[dict[str, object]]:
     settings = load_settings()
     return OrderRepository(settings).recent_fills(days=days, environment=environment)
+
+
+@app.get("/admin/worker-config")
+async def get_worker_config() -> list[dict[str, object]]:
+    return WorkerConfigRepository(load_settings()).all()
+
+
+@app.put("/admin/worker-config/{key}")
+async def set_worker_config(key: str, body: dict[str, str]) -> dict[str, object]:
+    allowed = {"min_signal_confidence", "watched_symbols"}
+    if key not in allowed:
+        raise HTTPException(status_code=400, detail=f"unknown_key:{key}")
+    value = body.get("value", "").strip()
+    if not value:
+        raise HTTPException(status_code=400, detail="value_required")
+    WorkerConfigRepository(load_settings()).set(key, value, actor=body.get("actor", "api"))
+    return {"key": key, "value": value, "status": "updated"}
 
 
 @app.get("/audit/events")
