@@ -20,6 +20,8 @@ from rac.orders.executor import PaperOrderExecutor
 from rac.orders.models import ExecuteSignalRequest
 from rac.orders.reconciliation import ReconciliationService
 from rac.orders.repository import OrderRepository
+from rac.notifications.service import AlertService
+from rac.notifications.telegram import TelegramClient
 from rac.portfolio.repository import PortfolioRepository
 from rac.portfolio.service import PortfolioMarkToMarketService
 from rac.risk.manager import RiskManager
@@ -67,7 +69,7 @@ def _sl_tp_trigger(
 
 # --- lógica del ciclo ---
 
-async def run_cycle(settings: Settings, broker: AlpacaBrokerAdapter) -> None:
+async def run_cycle(settings: Settings, broker: AlpacaBrokerAdapter, alerts: AlertService) -> None:
     market_repo = MarketDataRepository(settings)
     feature_repo = FeatureRepository(settings)
     signal_repo = SignalRepository(settings)
@@ -87,7 +89,7 @@ async def run_cycle(settings: Settings, broker: AlpacaBrokerAdapter) -> None:
     except Exception as exc:
         log.warning("reconcile_error: %s", exc)
 
-    # 2. Mark to market — actualiza NAV paper con precios recientes (incluye pnl_daily)
+    # 2. Mark to market + drawdown alert
     try:
         mtm = await PortfolioMarkToMarketService(settings, portfolio_repo, broker).run(
             environment="paper",
@@ -97,14 +99,22 @@ async def run_cycle(settings: Settings, broker: AlpacaBrokerAdapter) -> None:
             "mark_to_market nav=%.2f positions_value=%.2f errors=%d",
             mtm.nav, mtm.positions_value, len(mtm.errors),
         )
+        peak = portfolio_repo.peak_nav("paper")
+        if peak > 0:
+            drawdown_pct = max(0.0, (peak - mtm.nav) / peak * 100.0)
+            alerts.on_drawdown(drawdown_pct, settings.max_drawdown_pct)
     except Exception as exc:
         log.warning("mark_to_market_error: %s", exc)
 
     # 3. Kill switch — bloquea ejecución de órdenes (reconciliación y MTM ya corrieron)
-    if KillSwitchRepository(settings).is_active():
+    ks_repo = KillSwitchRepository(settings)
+    if ks_repo.is_active():
+        ks_state = ks_repo.current_state()
+        alerts.on_kill_switch_active(ks_state.reason if ks_state and ks_state.reason else "unknown")
         log.warning("KILL_SWITCH_ACTIVE — order execution blocked this cycle")
         _audit(audit, "worker.kill_switch_blocked", settings, {"cycle_skipped": True})
         return
+    alerts.on_kill_switch_reset()
 
     # 4. Estado de cuenta y posiciones desde Alpaca
     try:
@@ -342,17 +352,19 @@ async def main() -> None:
     log.info("database ready")
 
     broker = AlpacaBrokerAdapter(settings)
+    alerts = AlertService(TelegramClient(settings.telegram_bot_token, settings.telegram_chat_id))
     interval = settings.loop_interval_seconds
 
     log.info(
-        "worker started symbols=%s timeframe=%s interval=%ds",
+        "worker started symbols=%s timeframe=%s interval=%ds telegram=%s",
         list(settings.watched_symbols), settings.watched_timeframe, interval,
+        alerts._client.configured,
     )
 
     while True:
         started = asyncio.get_event_loop().time()
         try:
-            await run_cycle(settings, broker)
+            await run_cycle(settings, broker, alerts)
         except Exception as exc:
             log.error("cycle_error: %s", exc, exc_info=True)
         elapsed = asyncio.get_event_loop().time() - started

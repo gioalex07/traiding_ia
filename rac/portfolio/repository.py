@@ -208,6 +208,19 @@ class PortfolioRepository:
                 )
             conn.commit()
 
+    def peak_nav(self, environment: str = "paper") -> float:
+        with psycopg.connect(self._database_url) as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT COALESCE(MAX(nav), 0)
+                    FROM portfolio_snapshots
+                    WHERE environment = %s
+                    """,
+                    (environment,),
+                )
+                return float(cursor.fetchone()[0])
+
     def positions(self, environment: str = "paper") -> list[dict[str, object]]:
         with psycopg.connect(self._database_url, row_factory=dict_row) as conn:
             with conn.cursor() as cursor:
