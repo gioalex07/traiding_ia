@@ -1,3 +1,5 @@
+from typing import Any, cast
+
 from rac.brokers.alpaca import AlpacaBrokerAdapter
 from rac.config import Settings, TradingMode
 from rac.portfolio.models import MarkToMarketPosition, MarkToMarketResult
@@ -44,8 +46,8 @@ class PortfolioMarkToMarketService:
         errors: list[str] = []
         for position in positions:
             symbol = str(position["symbol"])
-            quantity = float(position["quantity"])
-            average_price = float(position["average_price"])
+            quantity = float(cast(Any, position["quantity"]))
+            average_price = float(cast(Any, position["average_price"]))
             try:
                 bars = await self.broker.get_latest_bars(symbol=symbol, timeframe=timeframe, limit=1)
                 if not bars:

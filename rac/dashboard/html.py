@@ -163,23 +163,73 @@ DASHBOARD_HTML = """
   </header>
   <main>
     <div class="grid">
-      <section class="panel span-3"><h2>Mode</h2><div class="content metric"><span id="mode" class="value">-</span><span id="broker" class="label">-</span></div></section>
-      <section class="panel span-3"><h2>Kill Switch</h2><div class="content"><span id="kill" class="status">-</span><div id="kill-reason" class="label"></div></div></section>
-      <section class="panel span-3"><h2>Alpaca Paper</h2><div class="content metric"><span id="equity" class="value">-</span><span id="cash" class="label">-</span></div></section>
-      <section class="panel span-3"><h2>Local AI</h2><div class="content"><span id="ai" class="status">-</span><div id="ai-models" class="label"></div></div></section>
+      <section class="panel span-3">
+        <h2>Mode</h2>
+        <div class="content metric">
+          <span id="mode" class="value">-</span>
+          <span id="broker" class="label">-</span>
+        </div>
+      </section>
+      <section class="panel span-3">
+        <h2>Kill Switch</h2>
+        <div class="content">
+          <span id="kill" class="status">-</span>
+          <div id="kill-reason" class="label"></div>
+        </div>
+      </section>
+      <section class="panel span-3">
+        <h2>Alpaca Paper</h2>
+        <div class="content metric">
+          <span id="equity" class="value">-</span>
+          <span id="cash" class="label">-</span>
+        </div>
+      </section>
+      <section class="panel span-3">
+        <h2>Local AI</h2>
+        <div class="content">
+          <span id="ai" class="status">-</span>
+          <div id="ai-models" class="label"></div>
+        </div>
+      </section>
 
-      <section class="panel span-4"><h2>Portfolio Snapshot</h2><div class="content" id="portfolio-snapshot"></div></section>
-      <section class="panel span-4"><h2>RAC Positions</h2><div class="content" id="portfolio-positions"></div></section>
-      <section class="panel span-4"><h2>Broker Positions</h2><div class="content" id="broker-positions"></div></section>
-      <section class="panel span-12"><h2>Mark to Market</h2><div class="content" id="mark-to-market"><span class="muted">Run to update NAV from latest available prices</span></div></section>
+      <section class="panel span-4">
+        <h2>Portfolio Snapshot</h2>
+        <div class="content" id="portfolio-snapshot"></div>
+      </section>
+      <section class="panel span-4">
+        <h2>RAC Positions</h2>
+        <div class="content" id="portfolio-positions"></div>
+      </section>
+      <section class="panel span-4">
+        <h2>Broker Positions</h2>
+        <div class="content" id="broker-positions"></div>
+      </section>
+      <section class="panel span-12">
+        <h2>Mark to Market</h2>
+        <div class="content" id="mark-to-market">
+          <span class="muted">Run to update NAV from latest available prices</span>
+        </div>
+      </section>
 
       <section class="panel span-12">
         <h2>Paper Analysis Pipeline</h2>
         <div class="content">
           <div class="form-grid">
-            <label class="field"><span class="label">Symbol</span><input id="pipeline-symbol" value="AAPL" autocomplete="off"></label>
-            <label class="field"><span class="label">Timeframe</span><input id="pipeline-timeframe" value="1Day" autocomplete="off"></label>
-            <label class="field"><span class="label">Strategy</span><select id="pipeline-strategy"><option value="trend_following_v1">trend_following_v1</option><option value="mean_reversion_v1">mean_reversion_v1</option></select></label>
+            <label class="field">
+              <span class="label">Symbol</span>
+              <input id="pipeline-symbol" value="AAPL" autocomplete="off">
+            </label>
+            <label class="field">
+              <span class="label">Timeframe</span>
+              <input id="pipeline-timeframe" value="1Day" autocomplete="off">
+            </label>
+            <label class="field">
+              <span class="label">Strategy</span>
+              <select id="pipeline-strategy">
+                <option value="trend_following_v1">trend_following_v1</option>
+                <option value="mean_reversion_v1">mean_reversion_v1</option>
+              </select>
+            </label>
             <label class="field"><span class="label">Start</span><input id="pipeline-start" type="date"></label>
             <label class="field"><span class="label">End</span><input id="pipeline-end" type="date"></label>
             <button class="secondary" onclick="runPipeline()">Run</button>
@@ -188,7 +238,10 @@ DASHBOARD_HTML = """
         </div>
       </section>
 
-      <section class="panel span-12"><h2>NAV History</h2><div class="content"><canvas id="nav-chart"></canvas></div></section>
+      <section class="panel span-12">
+        <h2>NAV History</h2>
+        <div class="content"><canvas id="nav-chart"></canvas></div>
+      </section>
 
       <section class="panel span-6"><h2>Latest Signals</h2><div class="content" id="signals"></div></section>
       <section class="panel span-6"><h2>Latest Orders</h2><div class="content" id="orders"></div></section>
@@ -212,12 +265,19 @@ DASHBOARD_HTML = """
       return d.toISOString().slice(0, 10);
     }
     const unwrap = section => section && section.ok ? section.data : null;
-    const error = section => section && !section.ok ? `<span class="error">${section.error}</span>` : `<span class="muted">No data</span>`;
-    const statusClass = value => value === true || value === "available" || value === "paper_configured" ? "good" : value ? "warn" : "bad";
+    const error = section => section && !section.ok
+      ? `<span class="error">${section.error}</span>`
+      : `<span class="muted">No data</span>`;
+    const statusClass = value => (
+      value === true || value === "available" || value === "paper_configured"
+    ) ? "good" : value ? "warn" : "bad";
     function rows(items, columns) {
       if (!items || !items.length) return '<span class="muted">No rows</span>';
       return `<table><thead><tr>${columns.map(c => `<th>${c.label}</th>`).join("")}</tr></thead><tbody>` +
-        items.map(item => `<tr>${columns.map(c => `<td>${c.render ? c.render(item) : (item[c.key] ?? "-")}</td>`).join("")}</tr>`).join("") +
+        items.map(item => `<tr>${columns.map(c => {
+          const value = c.render ? c.render(item) : (item[c.key] ?? "-");
+          return `<td>${value}</td>`;
+        }).join("")}</tr>`).join("") +
         `</tbody></table>`;
     }
     async function refresh() {
@@ -241,16 +301,23 @@ DASHBOARD_HTML = """
       document.getElementById("kill").className = `status ${kill.active ? "bad" : "good"}`;
       document.getElementById("kill-reason").textContent = kill.reason || "";
       document.getElementById("equity").textContent = account ? fmtMoney(account.equity) : "-";
-      document.getElementById("cash").textContent = account ? `cash ${fmtMoney(account.cash)} / buying power ${fmtMoney(account.buying_power)}` : error(data.broker_account);
+      document.getElementById("cash").textContent = account
+        ? `cash ${fmtMoney(account.cash)} / buying power ${fmtMoney(account.buying_power)}`
+        : error(data.broker_account);
       document.getElementById("ai").textContent = ai.status || "-";
       document.getElementById("ai").className = `status ${statusClass(ai.status)}`;
       document.getElementById("ai-models").textContent = (ai.models || []).join(", ");
       document.getElementById("portfolio-snapshot").innerHTML = snapshot && Object.keys(snapshot).length
-        ? `<div class="metric"><span class="value">${fmtMoney(snapshot.nav)}</span><span class="label">cash ${fmtMoney(snapshot.cash)} / drawdown ${fmtNum(snapshot.drawdown)}</span></div><pre>${JSON.stringify(snapshot.exposure || {}, null, 2)}</pre>`
+        ? `<div class="metric">
+            <span class="value">${fmtMoney(snapshot.nav)}</span>
+            <span class="label">cash ${fmtMoney(snapshot.cash)} / drawdown ${fmtNum(snapshot.drawdown)}</span>
+          </div>
+          <pre>${JSON.stringify(snapshot.exposure || {}, null, 2)}</pre>`
         : error(data.portfolio_snapshot);
       document.getElementById("portfolio-positions").innerHTML = rows(racPositions, [
         { label: "Symbol", key: "symbol" }, { label: "Qty", render: x => fmtNum(x.quantity) },
-        { label: "Avg", render: x => fmtMoney(x.average_price) }, { label: "Value", render: x => fmtMoney(x.market_value) }
+        { label: "Avg", render: x => fmtMoney(x.average_price) },
+        { label: "Value", render: x => fmtMoney(x.market_value) }
       ]);
       document.getElementById("broker-positions").innerHTML = rows(brokerPositions, [
         { label: "Symbol", key: "symbol" }, { label: "Qty", render: x => fmtNum(x.quantity) },
@@ -276,11 +343,19 @@ DASHBOARD_HTML = """
       const resultEl = document.getElementById("mark-to-market");
       resultEl.innerHTML = '<span class="muted">Updating paper NAV...</span>';
       try {
-        const response = await fetch("/portfolio/mark-to-market?environment=paper&timeframe=1Day", { method: "POST" });
+        const response = await fetch(
+          "/portfolio/mark-to-market?environment=paper&timeframe=1Day",
+          { method: "POST" }
+        );
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || response.statusText);
         resultEl.innerHTML = `
-          <div class="metric"><span class="value">${fmtMoney(data.nav)}</span><span class="label">cash ${fmtMoney(data.cash)} / positions ${fmtMoney(data.positions_value)} / ${data.status}</span></div>
+          <div class="metric">
+            <span class="value">${fmtMoney(data.nav)}</span>
+            <span class="label">
+              cash ${fmtMoney(data.cash)} / positions ${fmtMoney(data.positions_value)} / ${data.status}
+            </span>
+          </div>
           ${rows(data.positions, [
             { label: "Symbol", key: "symbol" },
             { label: "Qty", render: x => fmtNum(x.quantity) },
@@ -316,7 +391,13 @@ DASHBOARD_HTML = """
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || response.statusText);
         resultEl.innerHTML = `
-          <div class="metric"><span class="value">${data.latest_signal_direction || "no signal"}</span><span class="label">${data.symbol} ${data.timeframe} / fetched ${data.fetched}, accepted ${data.accepted}, features ${data.features_computed}, signals ${data.signals_generated}</span></div>
+          <div class="metric">
+            <span class="value">${data.latest_signal_direction || "no signal"}</span>
+            <span class="label">
+              ${data.symbol} ${data.timeframe} / fetched ${data.fetched}, accepted ${data.accepted},
+              features ${data.features_computed}, signals ${data.signals_generated}
+            </span>
+          </div>
           <pre>${data.ai_explanation || `AI status: ${data.ai_status || "not_requested"}`}</pre>
         `;
         refresh();
@@ -374,13 +455,21 @@ DASHBOARD_HTML = """
     async function activateKillSwitch() {
       const reason = prompt("Reason");
       if (!reason) return;
-      await fetch("/admin/kill-switch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason, actor: "dashboard" }) });
+      await fetch("/admin/kill-switch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason, actor: "dashboard" })
+      });
       refresh();
     }
     async function resetKillSwitch() {
       const reason = prompt("Reason");
       if (!reason) return;
-      await fetch("/admin/kill-switch/reset", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason, actor: "dashboard" }) });
+      await fetch("/admin/kill-switch/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason, actor: "dashboard" })
+      });
       refresh();
     }
     document.getElementById("pipeline-start").value = isoDate(45);
