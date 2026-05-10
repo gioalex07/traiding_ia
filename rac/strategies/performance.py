@@ -1,4 +1,5 @@
 from decimal import Decimal
+from typing import Any, cast
 
 import psycopg
 from psycopg.rows import dict_row
@@ -25,10 +26,10 @@ def aggregate_performance(fills: list[dict[str, object]]) -> list[dict[str, obje
             }
         notional = Decimal(str(f["notional"]))
         if f["side"] == "buy":
-            groups[sid]["buys"] = int(groups[sid]["buys"]) + 1
+            groups[sid]["buys"] = cast(Any, groups[sid]["buys"]) + 1
             groups[sid]["buy_notional"] = Decimal(str(groups[sid]["buy_notional"])) + notional
         else:
-            groups[sid]["sells"] = int(groups[sid]["sells"]) + 1
+            groups[sid]["sells"] = cast(Any, groups[sid]["sells"]) + 1
             groups[sid]["sell_notional"] = Decimal(str(groups[sid]["sell_notional"])) + notional
 
     result = []
