@@ -2,6 +2,7 @@ import json
 from typing import Any
 
 import psycopg
+from psycopg.rows import dict_row
 
 from rac.config import Settings
 
@@ -30,6 +31,42 @@ class AuditRepository:
                     (event_type, environment, correlation_id, actor, json.dumps(payload, default=str)),
                 )
             conn.commit()
+
+    def recent_events(
+        self,
+        *,
+        environment: str = "paper",
+        event_type: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        safe_limit = max(1, min(limit, 500))
+        with psycopg.connect(self._database_url, row_factory=dict_row) as conn:
+            with conn.cursor() as cursor:
+                if event_type:
+                    cursor.execute(
+                        """
+                        SELECT id, event_type, environment, correlation_id,
+                               actor, payload, created_at
+                        FROM audit_events
+                        WHERE environment = %s AND event_type = %s
+                        ORDER BY created_at DESC
+                        LIMIT %s
+                        """,
+                        (environment, event_type, safe_limit),
+                    )
+                else:
+                    cursor.execute(
+                        """
+                        SELECT id, event_type, environment, correlation_id,
+                               actor, payload, created_at
+                        FROM audit_events
+                        WHERE environment = %s
+                        ORDER BY created_at DESC
+                        LIMIT %s
+                        """,
+                        (environment, safe_limit),
+                    )
+                return [dict(row) for row in cursor.fetchall()]
 
     def record_risk_decision(self, request: Any, decision: Any) -> None:
         order = request.order

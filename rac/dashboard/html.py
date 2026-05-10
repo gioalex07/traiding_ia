@@ -258,6 +258,10 @@ DASHBOARD_HTML = """
       </section>
 
       <section class="panel span-12">
+        <h2>Audit Trail</h2>
+        <div class="content" id="audit-trail"><span class="muted">Loading...</span></div>
+      </section>
+      <section class="panel span-12">
         <h2>Strategy Performance</h2>
         <div class="content" id="strategy-performance"><span class="muted">Loading...</span></div>
       </section>
@@ -298,6 +302,23 @@ DASHBOARD_HTML = """
         }).join("")}</tr>`).join("") +
         `</tbody></table>`;
     }
+    async function loadAuditTrail() {
+      try {
+        const resp = await fetch("/audit/events?environment=paper&limit=20", { cache: "no-store" });
+        const data = await resp.json();
+        document.getElementById("audit-trail").innerHTML = data.length
+          ? rows(data, [
+              { label: "Time", render: x => new Date(x.created_at).toLocaleTimeString() },
+              { label: "Event", key: "event_type" },
+              { label: "Actor", key: "actor" },
+              { label: "Correlation", render: x => String(x.correlation_id).slice(0, 24) + "…" },
+            ])
+          : '<span class="muted">No audit events yet</span>';
+      } catch (e) {
+        document.getElementById("audit-trail").innerHTML = `<span class="error">${e.message}</span>`;
+      }
+    }
+
     async function loadStrategyPerformance() {
       try {
         const resp = await fetch("/strategies/performance?environment=paper", { cache: "no-store" });
@@ -385,6 +406,7 @@ DASHBOARD_HTML = """
       }
       drawNavChart(portfolioHistory || []);
       document.getElementById("last-refresh").textContent = new Date().toLocaleTimeString();
+      loadAuditTrail();
       loadStrategyPerformance();
     }
     function renderConsistency(data) {

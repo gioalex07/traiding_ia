@@ -580,6 +580,20 @@ async def get_backtest(backtest_id: str) -> dict[str, object]:
     return result
 
 
+@app.get("/audit/events")
+async def audit_events(
+    environment: str = "paper",
+    event_type: str | None = None,
+    limit: int = 50,
+) -> list[dict[str, object]]:
+    settings = load_settings()
+    return AuditRepository(settings).recent_events(
+        environment=environment,
+        event_type=event_type,
+        limit=limit,
+    )
+
+
 @app.get("/strategies/performance")
 async def strategy_performance(environment: str = "paper") -> list[dict[str, object]]:
     settings = load_settings()
