@@ -1,8 +1,7 @@
 import unittest
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 
 from rac.notifications.service import AlertService
-from rac.notifications.telegram import TelegramClient
 from rac.reports.daily import DailyReport, DailyReportService
 
 
@@ -153,7 +152,7 @@ class AlertServiceDailyReportTest(unittest.TestCase):
         kwargs = self._base_kwargs()
         kwargs["pnl_daily"] = -500.0
         svc.on_daily_report(**kwargs)
-        self.assertIn("-$500", client.sent[0])
+        self.assertIn("$-500", client.sent[0])
 
 
 # ── AlertService.should_send_daily_report ────────────────────────────────────

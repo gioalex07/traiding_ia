@@ -257,7 +257,10 @@ DASHBOARD_HTML = """
         <div class="content"><canvas id="nav-chart"></canvas></div>
       </section>
 
-      <section class="panel span-12"><h2>Strategy Performance</h2><div class="content" id="strategy-performance"><span class="muted">Loading...</span></div></section>
+      <section class="panel span-12">
+        <h2>Strategy Performance</h2>
+        <div class="content" id="strategy-performance"><span class="muted">Loading...</span></div>
+      </section>
       <section class="panel span-6"><h2>Latest Signals</h2><div class="content" id="signals"></div></section>
       <section class="panel span-6"><h2>Latest Orders</h2><div class="content" id="orders"></div></section>
       <section class="panel span-12"><h2>Backtests</h2><div class="content" id="backtests"></div></section>
