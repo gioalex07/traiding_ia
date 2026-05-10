@@ -1,6 +1,8 @@
 from datetime import UTC, datetime
 
 from fastapi import FastAPI, HTTPException
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 from rac.admin.kill_switch import KillSwitchActivateRequest, KillSwitchRepository, KillSwitchState
 from rac.audit.repository import AuditRepository
@@ -9,6 +11,8 @@ from rac.backtest.models import BacktestRequest, BacktestResult
 from rac.backtest.repository import BacktestRepository
 from rac.brokers.alpaca import AlpacaBrokerAdapter
 from rac.config import load_settings
+from rac.dashboard.html import DASHBOARD_HTML
+from rac.dashboard.service import DashboardService
 from rac.db.bootstrap import bootstrap_database
 from rac.db.health import check_postgres, check_redis
 from rac.discovery.service import EnvironmentDiscoveryService
@@ -51,6 +55,23 @@ async def health() -> dict[str, str]:
         "status": "ok",
         "timestamp": datetime.now(UTC).isoformat(),
     }
+
+
+@app.get("/")
+async def root() -> RedirectResponse:
+    return RedirectResponse(url="/dashboard")
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard() -> HTMLResponse:
+    return HTMLResponse(DASHBOARD_HTML)
+
+
+@app.get("/dashboard/data")
+async def dashboard_data() -> dict[str, object]:
+    settings = load_settings()
+    snapshot = await DashboardService(settings).snapshot()
+    return jsonable_encoder(snapshot)
 
 
 @app.get("/admin/kill-switch", response_model=KillSwitchState)

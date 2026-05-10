@@ -128,3 +128,19 @@ class SignalRepository:
                 row = cursor.fetchone()
                 return dict(row) if row else None
 
+    def latest_all(self, limit: int = 20) -> list[dict[str, object]]:
+        with psycopg.connect(self._database_url, row_factory=dict_row) as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT id, time, environment, strategy_id, strategy_version,
+                           symbol, timeframe, direction, confidence,
+                           stop_loss_pct, take_profit_pct, max_position_pct,
+                           invalidation_rules, raw_payload, created_at
+                    FROM signals
+                    ORDER BY created_at DESC
+                    LIMIT %s
+                    """,
+                    (limit,),
+                )
+                return list(cursor.fetchall())

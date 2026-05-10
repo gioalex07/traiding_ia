@@ -36,6 +36,12 @@ curl http://localhost:8000/ready
 curl http://localhost:8000/capabilities
 ```
 
+Open the local admin dashboard:
+
+```text
+http://localhost:8000/dashboard
+```
+
 Check Alpaca paper read-only connectivity:
 
 ```bash
