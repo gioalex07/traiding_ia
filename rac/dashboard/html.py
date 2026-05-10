@@ -257,6 +257,7 @@ DASHBOARD_HTML = """
         <div class="content"><canvas id="nav-chart"></canvas></div>
       </section>
 
+      <section class="panel span-12"><h2>Strategy Performance</h2><div class="content" id="strategy-performance"><span class="muted">Loading...</span></div></section>
       <section class="panel span-6"><h2>Latest Signals</h2><div class="content" id="signals"></div></section>
       <section class="panel span-6"><h2>Latest Orders</h2><div class="content" id="orders"></div></section>
       <section class="panel span-12"><h2>Backtests</h2><div class="content" id="backtests"></div></section>
@@ -294,6 +295,29 @@ DASHBOARD_HTML = """
         }).join("")}</tr>`).join("") +
         `</tbody></table>`;
     }
+    async function loadStrategyPerformance() {
+      try {
+        const resp = await fetch("/strategies/performance?environment=paper", { cache: "no-store" });
+        const data = await resp.json();
+        document.getElementById("strategy-performance").innerHTML = data.length
+          ? rows(data, [
+              { label: "Strategy", key: "strategy_id" },
+              { label: "Buys", key: "buys" },
+              { label: "Sells", key: "sells" },
+              { label: "Bought", render: x => fmtMoney(x.buy_notional) },
+              { label: "Sold", render: x => fmtMoney(x.sell_notional) },
+              { label: "Realized P&L", render: x => {
+                  const n = Number(x.realized_pnl);
+                  const cls = n >= 0 ? "good" : "bad";
+                  return `<span style="color:var(--${cls})">${fmtMoney(n)}</span>`;
+              }},
+            ])
+          : '<span class="muted">No fills recorded yet</span>';
+      } catch (e) {
+        document.getElementById("strategy-performance").innerHTML = `<span class="error">${e.message}</span>`;
+      }
+    }
+
     async function refresh() {
       const response = await fetch("/dashboard/data", { cache: "no-store" });
       const data = await response.json();
@@ -358,6 +382,7 @@ DASHBOARD_HTML = """
       }
       drawNavChart(portfolioHistory || []);
       document.getElementById("last-refresh").textContent = new Date().toLocaleTimeString();
+      loadStrategyPerformance();
     }
     function renderConsistency(data) {
       const className = data.status === "ok" ? "good" : data.status === "degraded" ? "warn" : "bad";
