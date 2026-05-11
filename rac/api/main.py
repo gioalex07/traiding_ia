@@ -582,6 +582,62 @@ async def get_backtest(backtest_id: str) -> dict[str, object]:
     return result
 
 
+@app.get("/portfolio/live-positions")
+async def live_positions(environment: str = "paper") -> list[dict[str, object]]:
+    settings = load_settings()
+    repo = PortfolioRepository(settings)
+    order_repo = OrderRepository(settings)
+    broker = AlpacaBrokerAdapter(settings)
+
+    positions = repo.positions(environment)
+    if not positions:
+        return []
+
+    try:
+        broker_pos = {p.symbol.upper(): p for p in await broker.get_positions()}
+    except Exception:
+        broker_pos = {}
+
+    result = []
+    for pos in positions:
+        symbol    = str(pos["symbol"]).upper()
+        qty       = float(pos["quantity"]) if pos["quantity"] else 0.0
+        avg_price = float(pos["average_price"]) if pos["average_price"] else 0.0
+        if qty <= 0 or avg_price <= 0:
+            continue
+
+        bp = broker_pos.get(symbol)
+        current_price = (bp.market_value / bp.quantity) if (bp and bp.quantity) else avg_price
+
+        order = order_repo.latest_filled_buy(symbol)
+        tp = float(order["take_profit_price"]) if order and order.get("take_profit_price") else None
+        sl = float(order["stop_loss_price"])    if order and order.get("stop_loss_price")    else None
+
+        unrealized_pnl = (current_price - avg_price) * qty
+        pnl_pct        = (current_price - avg_price) / avg_price * 100 if avg_price else 0.0
+
+        # Position progress: 0=at SL, 100=at TP
+        progress_pct: float | None = None
+        if tp and sl and tp != sl:
+            progress_pct = max(0.0, min(100.0, (current_price - sl) / (tp - sl) * 100))
+
+        result.append({
+            "symbol":           symbol,
+            "quantity":         qty,
+            "avg_entry_price":  avg_price,
+            "current_price":    current_price,
+            "market_value":     current_price * qty,
+            "unrealized_pnl":   unrealized_pnl,
+            "pnl_pct":          pnl_pct,
+            "take_profit_price": tp,
+            "stop_loss_price":   sl,
+            "dist_to_tp_pct":   ((tp - current_price) / current_price * 100) if tp else None,
+            "dist_to_sl_pct":   ((current_price - sl) / current_price * 100) if sl else None,
+            "progress_pct":     progress_pct,
+        })
+    return result
+
+
 @app.get("/portfolio/fills")
 async def portfolio_fills(environment: str = "paper", days: int = 7) -> list[dict[str, object]]:
     settings = load_settings()

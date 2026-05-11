@@ -140,6 +140,19 @@ DASHBOARD_HTML = """
     }
     .error { color: var(--bad); }
     .muted { color: var(--muted); }
+    .progress-track {
+      background:#edf0f5; border-radius:4px; height:6px; margin-top:4px; position:relative;
+    }
+    .progress-fill {
+      height:6px; border-radius:4px; transition:width 0.5s;
+    }
+    .market-badge {
+      display:inline-flex; align-items:center; gap:6px;
+      padding:4px 10px; border-radius:999px; font-size:12px; font-weight:700;
+    }
+    .market-badge.open   { background:#ecfdf5; color:#0f766e; }
+    .market-badge.closed { background:#f1f5f9; color:#667085; }
+    .market-badge.pre    { background:#fffbeb; color:#b45309; }
     @media (max-width: 1000px) {
       .span-3, .span-4, .span-6, .span-8 { grid-column: span 12; }
       .form-grid { grid-template-columns: 1fr; }
@@ -149,9 +162,13 @@ DASHBOARD_HTML = """
 </head>
 <body>
   <header>
-    <div>
-      <h1>RAC</h1>
-      <div class="sub">Robo Advisor / Autonomous Capital</div>
+    <div style="display:flex;align-items:center;gap:20px">
+      <div>
+        <h1>RAC</h1>
+        <div class="sub">Robo Advisor / Autonomous Capital</div>
+      </div>
+      <div id="market-clock" style="display:flex;flex-direction:column;gap:2px"></div>
+      <div id="header-pnl" style="display:flex;flex-direction:column;gap:2px"></div>
     </div>
     <div class="actions">
       <span id="last-refresh" class="sub"></span>
@@ -205,6 +222,10 @@ DASHBOARD_HTML = """
       <section class="panel span-4">
         <h2>Broker Positions</h2>
         <div class="content" id="broker-positions"></div>
+      </section>
+      <section class="panel span-12">
+        <h2>Open Positions — Live</h2>
+        <div class="content" id="live-positions"><span class="muted">Loading...</span></div>
       </section>
       <section class="panel span-6">
         <h2>Fills Today</h2>
@@ -614,6 +635,8 @@ DASHBOARD_HTML = """
       ]);
       loadNavHistory();
       document.getElementById("last-refresh").textContent = new Date().toLocaleTimeString();
+      if (account) updateHeaderPnl(account.equity);
+      loadLivePositions();
       loadFills();
       loadTradeOutcomes();
       loadWorkerConfig();
@@ -734,6 +757,122 @@ DASHBOARD_HTML = """
         resultEl.innerHTML = `<span class="error">${err.message}</span>`;
       }
     }
+    // ── Market Clock ───────────────────────────────────────────────────
+    const BASELINE_CAPITAL = 100000;
+
+    function isDST(d) {
+      const jan = new Date(d.getFullYear(), 0, 1);
+      const jul = new Date(d.getFullYear(), 6, 1);
+      return d.getTimezoneOffset() < Math.max(jan.getTimezoneOffset(), jul.getTimezoneOffset());
+    }
+    function toET(d) {
+      const off = isDST(d) ? -4 : -5;
+      return new Date(d.getTime() + (d.getTimezoneOffset() + off * 60) * 60000);
+    }
+    function fmtCountdown(ms) {
+      if (ms <= 0) return "0m";
+      const h = Math.floor(ms / 3600000);
+      const m = Math.floor((ms % 3600000) / 60000);
+      return h > 0 ? `${h}h ${m}m` : `${m}m`;
+    }
+    function updateMarketClock() {
+      const now = new Date();
+      const et  = toET(now);
+      const day = et.getDay();
+      const min = et.getHours() * 60 + et.getMinutes();
+      const OPEN = 9*60+30, CLOSE = 16*60;
+      let badge, sub;
+      if (day === 0 || day === 6) {
+        badge = '<span class="market-badge closed">● CLOSED</span>';
+        const daysToMon = day === 6 ? 2 : 1;
+        const msToOpen = (daysToMon * 1440 + OPEN - min) * 60000;
+        sub = `<span class="sub" style="color:#94a3b8">Opens in ${fmtCountdown(msToOpen)}</span>`;
+      } else if (min < OPEN) {
+        badge = '<span class="market-badge pre">◐ PRE-MARKET</span>';
+        sub = `<span class="sub" style="color:#94a3b8">Opens in ${fmtCountdown((OPEN-min)*60000)}</span>`;
+      } else if (min < CLOSE) {
+        badge = '<span class="market-badge open">● OPEN</span>';
+        sub = `<span class="sub" style="color:#94a3b8">Closes in ${fmtCountdown((CLOSE-min)*60000)}</span>`;
+      } else {
+        badge = '<span class="market-badge closed">● AFTER-HOURS</span>';
+        const msToOpen = (OPEN + 1440 - min) * 60000;
+        sub = `<span class="sub" style="color:#94a3b8">Opens in ${fmtCountdown(msToOpen)}</span>`;
+      }
+      document.getElementById("market-clock").innerHTML = badge + sub;
+    }
+    setInterval(updateMarketClock, 30000);
+    updateMarketClock();
+
+    function updateHeaderPnl(equity) {
+      if (!equity) return;
+      const pnl  = equity - BASELINE_CAPITAL;
+      const pct  = pnl / BASELINE_CAPITAL * 100;
+      const sign = pnl >= 0 ? "+" : "";
+      const col  = pnl >= 0 ? "#0f766e" : "#b91c1c";
+      document.getElementById("header-pnl").innerHTML =
+        `<span style="font-size:20px;font-weight:750;color:${col}">${sign}${fmtMoney(pnl)}</span>` +
+        `<span class="sub" style="color:${col}">${sign}${pct.toFixed(2)}% vs $100k</span>`;
+    }
+
+    // ── Live Positions ──────────────────────────────────────────────────
+    async function loadLivePositions() {
+      try {
+        const resp = await fetch("/portfolio/live-positions?environment=paper", { cache: "no-store" });
+        const data = await resp.json();
+        if (!data.length) {
+          document.getElementById("live-positions").innerHTML =
+            '<span class="muted">No open positions</span>';
+          return;
+        }
+        const html = data.map(p => {
+          const pnlColor = p.unrealized_pnl >= 0 ? "good" : "bad";
+          const pnlSign  = p.unrealized_pnl >= 0 ? "+" : "";
+          const prog     = p.progress_pct != null ? p.progress_pct : null;
+          const fillCol  = prog != null
+            ? (prog > 66 ? "#0f766e" : prog > 33 ? "#b45309" : "#b91c1c")
+            : "#94a3b8";
+          const distTp = p.dist_to_tp_pct != null
+            ? `<span style="color:#0f766e">TP ${p.dist_to_tp_pct.toFixed(2)}%</span>` : "-";
+          const distSl = p.dist_to_sl_pct != null
+            ? `<span style="color:#b91c1c">SL ${p.dist_to_sl_pct.toFixed(2)}%</span>` : "-";
+          const progressBar = prog != null ? `
+            <div class="progress-track" title="${prog.toFixed(0)}% to TP">
+              <div class="progress-fill" style="width:${prog}%;background:${fillCol}"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:10px;margin-top:2px">
+              <span style="color:#b91c1c">SL ${fmtMoney(p.stop_loss_price)}</span>
+              <span style="color:#667085">${prog.toFixed(0)}%</span>
+              <span style="color:#0f766e">TP ${fmtMoney(p.take_profit_price)}</span>
+            </div>` : "";
+          return `<div style="border:1px solid #edf0f5;border-radius:8px;padding:12px;margin-bottom:8px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start">
+              <div>
+                <span style="font-size:16px;font-weight:750">${p.symbol}</span>
+                <span class="label" style="margin-left:8px">${fmtNum(p.quantity)} shares</span>
+              </div>
+              <div style="text-align:right">
+                <div style="font-size:16px;font-weight:750;color:var(--${pnlColor})">
+                  ${pnlSign}${fmtMoney(p.unrealized_pnl)}
+                  <span style="font-size:12px">(${pnlSign}${p.pnl_pct.toFixed(2)}%)</span>
+                </div>
+                <div class="label">${distSl} &nbsp;·&nbsp; ${distTp}</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:16px;margin-top:6px" class="label">
+              <span>Entry ${fmtMoney(p.avg_entry_price)}</span>
+              <span>Now ${fmtMoney(p.current_price)}</span>
+              <span>Value ${fmtMoney(p.market_value)}</span>
+            </div>
+            ${progressBar}
+          </div>`;
+        }).join("");
+        document.getElementById("live-positions").innerHTML = html;
+      } catch (e) {
+        document.getElementById("live-positions").innerHTML =
+          `<span class="error">${e.message}</span>`;
+      }
+    }
+
     // ── NAV Chart ──────────────────────────────────────────────────────
     let _navPoints = [];
     let _navRange  = 0;
