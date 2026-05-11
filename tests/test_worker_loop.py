@@ -23,20 +23,19 @@ class SkipReasonTest(unittest.TestCase):
         self.assertEqual(reason, "no_position_to_sell")
 
     def test_stale_signal_is_skipped(self) -> None:
-        reason = _skip_reason("buy", age_seconds=300, position=None)
+        reason = _skip_reason("buy", age_seconds=300, position=None, max_age_seconds=120)
         self.assertIsNotNone(reason)
         self.assertTrue(reason.startswith("stale:"))
 
     def test_stale_sell_without_position_reports_stale_first(self) -> None:
-        # staleness se chequea antes que la posición
-        reason = _skip_reason("sell", age_seconds=300, position=None)
+        reason = _skip_reason("sell", age_seconds=300, position=None, max_age_seconds=120)
         self.assertTrue(reason.startswith("stale:"))
 
     def test_boundary_exactly_at_max_age_proceeds(self) -> None:
-        self.assertIsNone(_skip_reason("buy", age_seconds=120, position=None))
+        self.assertIsNone(_skip_reason("buy", age_seconds=120, position=None, max_age_seconds=120))
 
     def test_one_second_over_max_age_is_stale(self) -> None:
-        reason = _skip_reason("buy", age_seconds=121, position=None)
+        reason = _skip_reason("buy", age_seconds=121, position=None, max_age_seconds=120)
         self.assertIsNotNone(reason)
 
 
