@@ -163,13 +163,44 @@ class OrderRepository:
                 cursor.execute(
                     """
                     SELECT id, environment, symbol, side, quantity, estimated_price,
-                           broker_order_id, strategy_id
+                           broker_order_id, strategy_id, signal_id, raw_payload, created_at
                     FROM orders
                     WHERE status = 'submitted' AND broker_order_id IS NOT NULL
                     ORDER BY created_at ASC
                     """
                 )
                 return list(cursor.fetchall())
+
+    def get_by_id(self, order_id: str) -> dict[str, object] | None:
+        with psycopg.connect(self._database_url, row_factory=dict_row) as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT id, environment, symbol, side, strategy_id, signal_id,
+                           filled_price, filled_qty, filled_at, estimated_price,
+                           quantity, created_at, raw_payload
+                    FROM orders WHERE id = %s
+                    """,
+                    (order_id,),
+                )
+                row = cursor.fetchone()
+                return dict(row) if row else None
+
+    def latest_filled_buy_full(self, symbol: str, environment: str) -> dict[str, object] | None:
+        with psycopg.connect(self._database_url, row_factory=dict_row) as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT id, strategy_id, filled_price, filled_qty, created_at, filled_at
+                    FROM orders
+                    WHERE symbol = %s AND environment = %s
+                      AND side = 'buy' AND status = 'filled'
+                    ORDER BY filled_at DESC LIMIT 1
+                    """,
+                    (symbol.upper(), environment),
+                )
+                row = cursor.fetchone()
+                return dict(row) if row else None
 
     def mark_filled(
         self,

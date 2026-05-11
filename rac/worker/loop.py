@@ -21,6 +21,7 @@ from rac.notifications.service import AlertService
 from rac.notifications.telegram import TelegramClient
 from rac.orders.executor import PaperOrderExecutor
 from rac.orders.models import ExecuteSignalRequest
+from rac.orders.outcome import TradeOutcomeRepository
 from rac.orders.reconciliation import ReconciliationService
 from rac.orders.repository import OrderRepository
 from rac.portfolio.repository import PortfolioRepository
@@ -115,7 +116,10 @@ async def run_cycle(settings: Settings, broker: AlpacaBrokerAdapter, alerts: Ale
 
     # 1. Reconciliar órdenes pendientes
     try:
-        recon = await ReconciliationService(broker, order_repo, portfolio_repo, alerts).reconcile_pending()
+        outcomes = TradeOutcomeRepository(settings)
+        recon = await ReconciliationService(
+            broker, order_repo, portfolio_repo, alerts, outcomes
+        ).reconcile_pending()
         if recon.checked:
             log.info(
                 "reconcile checked=%d filled=%d pending=%d cancelled=%d errors=%d",

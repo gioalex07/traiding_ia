@@ -34,6 +34,7 @@ from rac.market_data.repository import MarketDataRepository
 from rac.market_data.service import MarketDataIngestor
 from rac.orders.executor import PaperOrderExecutor
 from rac.orders.models import ExecuteSignalRequest, OrderExecutionResult, OrderStatus
+from rac.orders.outcome import TradeOutcomeRepository
 from rac.orders.reconciliation import ReconciliationResult, ReconciliationService
 from rac.orders.repository import OrderRepository
 from rac.pipeline.models import PaperPipelineRequest, PaperPipelineResult
@@ -616,6 +617,18 @@ async def audit_events(
         event_type=event_type,
         limit=limit,
     )
+
+
+@app.get("/trade-outcomes")
+async def trade_outcomes(environment: str = "paper", limit: int = 20) -> list[dict[str, object]]:
+    settings = load_settings()
+    return TradeOutcomeRepository(settings).recent(environment=environment, limit=limit)
+
+
+@app.get("/trade-outcomes/summary")
+async def trade_outcomes_summary(environment: str = "paper") -> list[dict[str, object]]:
+    settings = load_settings()
+    return TradeOutcomeRepository(settings).summary(environment=environment)
 
 
 @app.get("/strategies/performance")

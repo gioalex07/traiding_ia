@@ -306,8 +306,16 @@ DASHBOARD_HTML = """
         <h2>Audit Trail</h2>
         <div class="content" id="audit-trail"><span class="muted">Loading...</span></div>
       </section>
+      <section class="panel span-8">
+        <h2>Trade Outcomes</h2>
+        <div class="content" id="trade-outcomes"><span class="muted">Loading...</span></div>
+      </section>
+      <section class="panel span-4">
+        <h2>Strategy P&L Summary</h2>
+        <div class="content" id="strategy-summary"><span class="muted">Loading...</span></div>
+      </section>
       <section class="panel span-12">
-        <h2>Strategy Performance</h2>
+        <h2>Strategy Performance (fills)</h2>
         <div class="content" id="strategy-performance"><span class="muted">Loading...</span></div>
       </section>
       <section class="panel span-6"><h2>Latest Signals</h2><div class="content" id="signals"></div></section>
@@ -406,6 +414,58 @@ DASHBOARD_HTML = """
         setTimeout(() => { resultEl.innerHTML = ""; }, 4000);
       } catch (e) {
         resultEl.innerHTML = `<span class="error">${e.message}</span>`;
+      }
+    }
+
+    async function loadTradeOutcomes() {
+      try {
+        const [rOut, rSum] = await Promise.all([
+          fetch("/trade-outcomes?environment=paper&limit=15", { cache: "no-store" }),
+          fetch("/trade-outcomes/summary?environment=paper",  { cache: "no-store" }),
+        ]);
+        const outcomes = await rOut.json();
+        const summary  = await rSum.json();
+
+        document.getElementById("trade-outcomes").innerHTML = outcomes.length
+          ? rows(outcomes, [
+              { label: "Closed",    render: x => new Date(x.closed_at).toLocaleTimeString() },
+              { label: "Symbol",    key: "symbol" },
+              { label: "Strategy",  render: x => x.strategy_id.replace("_v1","") },
+              { label: "Reason",    key: "close_reason" },
+              { label: "Entry",     render: x => fmtMoney(x.open_price) },
+              { label: "Exit",      render: x => fmtMoney(x.close_price) },
+              { label: "P&L",       render: x => {
+                const n = Number(x.realized_pnl);
+                const p = Number(x.pnl_pct);
+                const c = n >= 0 ? "good" : "bad";
+                return `<span style="color:var(--${c})">${fmtMoney(n)} (${p>=0?"+":""}${p.toFixed(2)}%)</span>`;
+              }},
+              { label: "Duration",  render: x => {
+                const s = Number(x.duration_seconds);
+                return s < 3600 ? `${Math.round(s/60)}m` : `${(s/3600).toFixed(1)}h`;
+              }},
+            ])
+          : '<span class="muted">No closed trades yet</span>';
+
+        document.getElementById("strategy-summary").innerHTML = summary.length
+          ? rows(summary, [
+              { label: "Strategy",   render: x => x.strategy_id.replace("_v1","") },
+              { label: "Trades",     key: "trades" },
+              { label: "W/L",        render: x => `${x.wins}/${x.losses}` },
+              { label: "Total P&L",  render: x => {
+                const n = Number(x.total_pnl);
+                const c = n >= 0 ? "good" : "bad";
+                return `<span style="color:var(--${c})">${fmtMoney(n)}</span>`;
+              }},
+              { label: "Avg %",      render: x => {
+                const p = Number(x.avg_pnl_pct);
+                const c = p >= 0 ? "good" : "bad";
+                return `<span style="color:var(--${c})">${p>=0?"+":""}${p.toFixed(2)}%</span>`;
+              }},
+            ])
+          : '<span class="muted">No closed trades yet</span>';
+      } catch (e) {
+        document.getElementById("trade-outcomes").innerHTML = `<span class="error">${e.message}</span>`;
       }
     }
 
@@ -555,6 +615,7 @@ DASHBOARD_HTML = """
       loadNavHistory();
       document.getElementById("last-refresh").textContent = new Date().toLocaleTimeString();
       loadFills();
+      loadTradeOutcomes();
       loadWorkerConfig();
       loadAuditTrail();
       loadStrategyPerformance();

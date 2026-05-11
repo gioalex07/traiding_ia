@@ -1,3 +1,4 @@
+import json
 import logging
 from datetime import UTC, datetime
 from typing import Any
@@ -6,6 +7,7 @@ from pydantic import BaseModel
 
 from rac.brokers.alpaca import AlpacaBrokerAdapter
 from rac.notifications.service import AlertService
+from rac.orders.outcome import TradeOutcomeRepository
 from rac.orders.repository import OrderRepository
 from rac.portfolio.repository import PortfolioRepository
 
@@ -32,11 +34,13 @@ class ReconciliationService:
         order_repository: OrderRepository,
         portfolio_repository: PortfolioRepository,
         alerts: AlertService | None = None,
+        outcomes: TradeOutcomeRepository | None = None,
     ) -> None:
         self.broker = broker_adapter
         self.orders = order_repository
         self.portfolio = portfolio_repository
         self.alerts = alerts
+        self.outcomes = outcomes
 
     async def reconcile_pending(self) -> ReconciliationResult:
         pending = self.orders.pending_broker_orders()
@@ -79,6 +83,9 @@ class ReconciliationService:
                             quantity=filled_qty,
                             price=filled_price,
                         )
+                    if self.outcomes and str(order_any["side"]) == "sell":
+                        self._record_outcome(order_any, filled_price, filled_qty,
+                                             str(broker_order.get("filled_at") or ""))
 
                 elif alpaca_status in _TERMINAL_STATUSES:
                     self.orders.mark_cancelled(str(order_any["id"]), alpaca_status)
@@ -117,3 +124,58 @@ class ReconciliationService:
             cancelled=cancelled,
             errors=errors,
         )
+
+    def _record_outcome(
+        self,
+        sell_order: dict[str, Any],
+        sell_price: float,
+        sell_qty: float,
+        closed_at: str,
+    ) -> None:
+        if not self.outcomes:
+            return
+        try:
+            environment = str(sell_order["environment"])
+            symbol      = str(sell_order["symbol"])
+
+            # Try to find parent BUY via raw_payload (SL/TP close orders)
+            raw = sell_order.get("raw_payload")
+            if isinstance(raw, str):
+                raw = json.loads(raw)
+            parent_id = (raw or {}).get("parent_order_id") if isinstance(raw, dict) else None
+            close_reason = (raw or {}).get("reason", "signal") if isinstance(raw, dict) else "signal"
+
+            if parent_id:
+                buy_order = self.orders.get_by_id(str(parent_id))
+            else:
+                buy_order = self.orders.latest_filled_buy_full(symbol, environment)
+
+            if not buy_order:
+                log.warning("outcome_no_buy_found symbol=%s", symbol)
+                return
+
+            open_price = float(buy_order.get("filled_price") or buy_order.get("estimated_price") or 0)
+            opened_at  = str(buy_order.get("filled_at") or buy_order.get("created_at") or "")
+            strategy   = str(buy_order.get("strategy_id") or sell_order.get("strategy_id", "unknown"))
+
+            self.outcomes.record(
+                environment=environment,
+                symbol=symbol,
+                strategy_id=strategy,
+                open_order_id=str(buy_order["id"]),
+                close_order_id=str(sell_order["id"]),
+                open_price=open_price,
+                close_price=sell_price,
+                quantity=sell_qty,
+                close_reason=close_reason,
+                opened_at=opened_at,
+                closed_at=closed_at,
+            )
+            log.info(
+                "trade_outcome symbol=%s pnl=%.2f reason=%s",
+                symbol,
+                (sell_price - open_price) * sell_qty,
+                close_reason,
+            )
+        except Exception as exc:
+            log.warning("outcome_record_error: %s", exc)
