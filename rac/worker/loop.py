@@ -38,7 +38,6 @@ logging.basicConfig(
 log = logging.getLogger("rac.worker")
 
 _FEATURE_SET = "technical_v1"
-_SIGNAL_MAX_AGE_SECONDS = 120
 
 
 # --- funciones puras (testeables sin dependencias) ---
@@ -47,9 +46,10 @@ def _skip_reason(
     direction: str,
     age_seconds: float,
     position: Position | None,
+    max_age_seconds: int = 1200,
 ) -> str | None:
     """Devuelve el motivo para saltarse la señal, o None si debe ejecutarse."""
-    if age_seconds > _SIGNAL_MAX_AGE_SECONDS:
+    if age_seconds > max_age_seconds:
         return f"stale:{age_seconds:.0f}s"
     if direction == "sell" and position is None:
         return "no_position_to_sell"
@@ -103,11 +103,15 @@ async def run_cycle(settings: Settings, broker: AlpacaBrokerAdapter, alerts: Ale
     # Lee config dinámica desde DB (permite cambios sin reiniciar el worker)
     try:
         dyn = WorkerConfigRepository(settings)
-        min_confidence = dyn.effective_confidence(settings.min_signal_confidence)
+        min_confidence  = dyn.effective_confidence(settings.min_signal_confidence)
         watched_symbols = dyn.effective_symbols(settings.watched_symbols)
+        watched_tf      = dyn.effective_timeframe(settings.watched_timeframe)
+        max_signal_age  = dyn.effective_max_age_seconds(1200)
     except Exception:
-        min_confidence = settings.min_signal_confidence
+        min_confidence  = settings.min_signal_confidence
         watched_symbols = settings.watched_symbols
+        watched_tf      = settings.watched_timeframe
+        max_signal_age  = 1200
 
     # 1. Reconciliar órdenes pendientes
     try:
@@ -196,6 +200,7 @@ async def run_cycle(settings: Settings, broker: AlpacaBrokerAdapter, alerts: Ale
                 settings=settings,
                 broker=broker,
                 symbol=symbol,
+                timeframe=watched_tf,
                 market_repo=market_repo,
                 feature_repo=feature_repo,
                 signal_repo=signal_repo,
@@ -206,6 +211,7 @@ async def run_cycle(settings: Settings, broker: AlpacaBrokerAdapter, alerts: Ale
                 portfolio_cash=account.cash,
                 position=positions_by_symbol.get(symbol.upper()),
                 min_confidence=min_confidence,
+                max_signal_age=max_signal_age,
             )
         except Exception as exc:
             log.error("symbol_error symbol=%s error=%s", symbol, exc)
@@ -216,6 +222,7 @@ async def _process_symbol(
     settings: Settings,
     broker: AlpacaBrokerAdapter,
     symbol: str,
+    timeframe: str,
     market_repo: MarketDataRepository,
     feature_repo: FeatureRepository,
     signal_repo: SignalRepository,
@@ -226,8 +233,8 @@ async def _process_symbol(
     portfolio_cash: float,
     position: Position | None,
     min_confidence: float,
+    max_signal_age: int,
 ) -> None:
-    timeframe = settings.watched_timeframe
 
     bars = await broker.get_latest_bars(symbol, timeframe, limit=20)
     if not bars:
@@ -289,7 +296,7 @@ async def _process_symbol(
             signal_time = signal_time.replace(tzinfo=UTC)
         age_seconds = (datetime.now(UTC) - signal_time).total_seconds()
 
-        skip = _skip_reason(direction, age_seconds, position)
+        skip = _skip_reason(direction, age_seconds, position, max_signal_age)
         if skip:
             log.info("skip symbol=%s strategy=%s direction=%s reason=%s", symbol, strategy_id, direction, skip)
             continue

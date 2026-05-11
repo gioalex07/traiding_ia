@@ -594,7 +594,7 @@ async def get_worker_config() -> list[dict[str, object]]:
 
 @app.put("/admin/worker-config/{key}")
 async def set_worker_config(key: str, body: dict[str, str]) -> dict[str, object]:
-    allowed = {"min_signal_confidence", "watched_symbols"}
+    allowed = {"min_signal_confidence", "watched_symbols", "watched_timeframe", "signal_max_age_seconds"}
     if key not in allowed:
         raise HTTPException(status_code=400, detail=f"unknown_key:{key}")
     value = body.get("value", "").strip()

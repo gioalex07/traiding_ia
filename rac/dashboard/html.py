@@ -274,13 +274,27 @@ DASHBOARD_HTML = """
       <section class="panel span-12">
         <h2>Worker Config <span class="label" style="font-weight:normal">— applies next cycle</span></h2>
         <div class="content">
-          <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr auto">
+          <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr 1fr auto">
             <label class="field">
-              <span class="label">Min Signal Confidence (0–1)</span>
-              <input id="cfg-confidence" type="number" min="0" max="1" step="0.05" value="0.6">
+              <span class="label">Min Confidence (0–1)</span>
+              <input id="cfg-confidence" type="number" min="0" max="1" step="0.05" value="0.5">
             </label>
-            <label class="field" style="grid-column:span 2">
-              <span class="label">Watched Symbols (comma-separated)</span>
+            <label class="field">
+              <span class="label">Timeframe</span>
+              <select id="cfg-timeframe">
+                <option value="1Min">1Min</option>
+                <option value="5Min" selected>5Min</option>
+                <option value="15Min">15Min</option>
+                <option value="1Hour">1Hour</option>
+                <option value="1Day">1Day</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="label">Max Signal Age (seconds)</span>
+              <input id="cfg-maxage" type="number" min="60" step="60" value="1200">
+            </label>
+            <label class="field">
+              <span class="label">Symbols (comma-separated)</span>
               <input id="cfg-symbols" value="AAPL,MSFT,SPY" autocomplete="off">
             </label>
             <button class="secondary" onclick="saveWorkerConfig()">Save</button>
@@ -335,7 +349,7 @@ DASHBOARD_HTML = """
     }
     let _cfgFocused = false;
     document.addEventListener("DOMContentLoaded", () => {
-      ["cfg-confidence", "cfg-symbols"].forEach(id => {
+      ["cfg-confidence", "cfg-symbols", "cfg-timeframe", "cfg-maxage"].forEach(id => {
         const el = document.getElementById(id);
         if (el) {
           el.addEventListener("focus", () => { _cfgFocused = true; });
@@ -348,22 +362,25 @@ DASHBOARD_HTML = """
       try {
         const resp = await fetch("/admin/worker-config", { cache: "no-store" });
         const data = await resp.json();
-        for (const item of data) {
-          if (item.key === "min_signal_confidence") {
-            document.getElementById("cfg-confidence").value = item.value;
-          }
-          if (item.key === "watched_symbols") {
-            document.getElementById("cfg-symbols").value = item.value;
-          }
-        }
+        const map  = Object.fromEntries(data.map(x => [x.key, x.value]));
+        if (map.min_signal_confidence)
+          document.getElementById("cfg-confidence").value = map.min_signal_confidence;
+        if (map.watched_symbols)
+          document.getElementById("cfg-symbols").value = map.watched_symbols;
+        if (map.watched_timeframe)
+          document.getElementById("cfg-timeframe").value = map.watched_timeframe;
+        if (map.signal_max_age_seconds)
+          document.getElementById("cfg-maxage").value = map.signal_max_age_seconds;
       } catch (_) {}
     }
     async function saveWorkerConfig() {
       const confidence = document.getElementById("cfg-confidence").value.trim();
       const symbols    = document.getElementById("cfg-symbols").value.trim();
+      const timeframe  = document.getElementById("cfg-timeframe").value.trim();
+      const maxage     = document.getElementById("cfg-maxage").value.trim();
       const resultEl   = document.getElementById("cfg-result");
-      if (!confidence || !symbols) {
-        resultEl.innerHTML = '<span class="error">Both fields are required</span>';
+      if (!confidence || !symbols || !timeframe || !maxage) {
+        resultEl.innerHTML = '<span class="error">All fields are required</span>';
         return;
       }
       try {
@@ -375,6 +392,14 @@ DASHBOARD_HTML = """
           fetch("/admin/worker-config/watched_symbols", {
             method: "PUT", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ value: symbols, actor: "dashboard" }),
+          }),
+          fetch("/admin/worker-config/watched_timeframe", {
+            method: "PUT", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ value: timeframe, actor: "dashboard" }),
+          }),
+          fetch("/admin/worker-config/signal_max_age_seconds", {
+            method: "PUT", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ value: maxage, actor: "dashboard" }),
           }),
         ]);
         resultEl.innerHTML = '<span style="color:var(--good)">Saved — applies on next worker cycle</span>';

@@ -49,6 +49,19 @@ class WorkerConfigRepository:
         except ValueError:
             return env_default
 
+    def effective_timeframe(self, env_default: str) -> str:
+        raw = self.get("watched_timeframe")
+        return raw.strip() if raw and raw.strip() else env_default
+
+    def effective_max_age_seconds(self, env_default: int = 1200) -> int:
+        raw = self.get("signal_max_age_seconds")
+        if not raw:
+            return env_default
+        try:
+            return max(60, int(raw))
+        except ValueError:
+            return env_default
+
     def effective_symbols(self, env_default: tuple[str, ...]) -> tuple[str, ...]:
         raw = self.get("watched_symbols")
         if not raw:
