@@ -333,7 +333,18 @@ DASHBOARD_HTML = """
         }).join("")}</tr>`).join("") +
         `</tbody></table>`;
     }
+    let _cfgFocused = false;
+    document.addEventListener("DOMContentLoaded", () => {
+      ["cfg-confidence", "cfg-symbols"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.addEventListener("focus", () => { _cfgFocused = true; });
+          el.addEventListener("blur",  () => { _cfgFocused = false; });
+        }
+      });
+    });
     async function loadWorkerConfig() {
+      if (_cfgFocused) return;
       try {
         const resp = await fetch("/admin/worker-config", { cache: "no-store" });
         const data = await resp.json();
