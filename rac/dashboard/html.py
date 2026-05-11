@@ -490,25 +490,44 @@ DASHBOARD_HTML = """
         { label: "Symbol", key: "symbol" }, { label: "Qty", render: x => fmtNum(x.quantity) },
         { label: "Value", render: x => fmtMoney(x.market_value) }
       ]);
-      document.getElementById("signals").innerHTML = rows(signals, [
-        { label: "Symbol", key: "symbol" }, { label: "Dir", key: "direction" },
-        { label: "Conf", render: x => fmtNum(x.confidence) }, { label: "Strategy", key: "strategy_id" }
-      ]);
-      document.getElementById("orders").innerHTML = rows(orders, [
-        { label: "Symbol", key: "symbol" }, { label: "Side", key: "side" },
-        { label: "Status", key: "status" }, { label: "Qty", render: x => fmtNum(x.quantity) },
-        { label: "Price", render: x => fmtMoney(x.estimated_price) }
-      ]);
-      document.getElementById("backtests").innerHTML = rows(backtests, [
-        { label: "ID", key: "id" }, { label: "Symbol", key: "symbol" },
-        { label: "Strategy", key: "strategy_id" }, { label: "Created", key: "created_at" }
-      ]);
       if (consistency) {
         renderConsistency(consistency);
       } else {
         document.getElementById("portfolio-consistency").innerHTML = error(data.portfolio_consistency);
       }
-      drawNavChart(portfolioHistory || []);
+      document.getElementById("signals").innerHTML = rows(signals, [
+        { label: "Time",     render: x => new Date(x.time).toLocaleTimeString() },
+        { label: "Symbol",   key: "symbol" },
+        { label: "Dir",      render: x => {
+          const c = x.direction==="buy" ? "good" : x.direction==="sell" ? "bad" : "muted";
+          return `<span style="color:var(--${c});font-weight:650">${x.direction.toUpperCase()}</span>`;
+        }},
+        { label: "Conf",     render: x => {
+          const v = Number(x.confidence);
+          const c = v >= 0.7 ? "good" : v >= 0.5 ? "warn" : "muted";
+          return `<span style="color:var(--${c})">${v.toFixed(3)}</span>`;
+        }},
+        { label: "Strategy", render: x => x.strategy_id.replace("_v1","") },
+      ]);
+      document.getElementById("orders").innerHTML = rows(orders, [
+        { label: "Time",   render: x => new Date(x.created_at).toLocaleTimeString() },
+        { label: "Symbol", key: "symbol" },
+        { label: "Side",   render: x => {
+          const c = x.side==="buy" ? "good" : "bad";
+          return `<span style="color:var(--${c});font-weight:650">${x.side.toUpperCase()}</span>`;
+        }},
+        { label: "Status", render: x => {
+          const c = x.status==="filled" ? "good" : x.status==="submitted" ? "warn" : "muted";
+          return `<span style="color:var(--${c})">${x.status}</span>`;
+        }},
+        { label: "Price",  render: x => fmtMoney(x.filled_price || x.estimated_price) },
+      ]);
+      document.getElementById("backtests").innerHTML = rows(backtests, [
+        { label: "Symbol",   key: "symbol" },
+        { label: "Strategy", key: "strategy_id" },
+        { label: "Created",  render: x => new Date(x.created_at).toLocaleDateString() },
+      ]);
+      loadNavHistory();
       document.getElementById("last-refresh").textContent = new Date().toLocaleTimeString();
       loadFills();
       loadWorkerConfig();
@@ -629,67 +648,160 @@ DASHBOARD_HTML = """
         resultEl.innerHTML = `<span class="error">${err.message}</span>`;
       }
     }
-    let _navHistory = [];
-    let _navRange = 0;
+    // ── NAV Chart ──────────────────────────────────────────────────────
+    let _navPoints = [];
+    let _navRange  = 0;
+
+    async function loadNavHistory() {
+      const limit = _navRange === 0 ? 1000 : _navRange <= 7 ? 300 : 700;
+      try {
+        const resp = await fetch(
+          `/portfolio/history?environment=paper&limit=${limit}`,
+          { cache: "no-store" }
+        );
+        _navPoints = await resp.json();
+      } catch (_) { _navPoints = []; }
+      drawNavChart();
+    }
+
     function setNavRange(days) {
       _navRange = days;
-      ["7d","30d","all"].forEach(k => {
-        document.getElementById("nav-"+k).style.fontWeight = "";
+      document.querySelectorAll("[id^='nav-']").forEach(b => {
+        b.style.fontWeight = "";
+        b.style.background = "";
       });
       const key = days === 7 ? "7d" : days === 30 ? "30d" : "all";
-      document.getElementById("nav-"+key).style.fontWeight = "700";
-      drawNavChart(_navHistory);
+      const btn = document.getElementById("nav-" + key);
+      if (btn) { btn.style.fontWeight = "700"; btn.style.background = "#dbeafe"; }
+      loadNavHistory();
     }
-    function drawNavChart(allPoints) {
-      _navHistory = allPoints || [];
-      let points = _navHistory;
+
+    function drawNavChart() {
+      let points = _navPoints;
       if (_navRange > 0) {
         const cutoff = Date.now() - _navRange * 86400000;
-        points = _navHistory.filter(p => new Date(p.time).getTime() >= cutoff);
+        points = _navPoints.filter(p => new Date(p.time).getTime() >= cutoff);
       }
+
       const canvas = document.getElementById("nav-chart");
-      const rect = canvas.getBoundingClientRect();
+      if (!canvas) return;
+      const rect  = canvas.getBoundingClientRect();
       const scale = window.devicePixelRatio || 1;
-      canvas.width = Math.max(300, Math.floor(rect.width * scale));
-      canvas.height = Math.max(180, Math.floor(rect.height * scale));
+      canvas.width  = Math.max(400, Math.floor(rect.width  * scale));
+      canvas.height = Math.max(220, Math.floor(rect.height * scale));
       const ctx = canvas.getContext("2d");
       ctx.scale(scale, scale);
-      const width = canvas.width / scale;
-      const height = canvas.height / scale;
-      ctx.clearRect(0, 0, width, height);
+      const W = canvas.width / scale;
+      const H = canvas.height / scale;
+      ctx.clearRect(0, 0, W, H);
       ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, width, height);
-      const values = points.map(p => Number(p.nav)).filter(Number.isFinite);
-      if (values.length < 2) {
+      ctx.fillRect(0, 0, W, H);
+
+      const navVals = points.map(p => Number(p.nav)).filter(Number.isFinite);
+      if (navVals.length < 2) {
         ctx.fillStyle = "#667085";
         ctx.font = "13px system-ui";
-        ctx.fillText("No NAV history yet", 16, 28);
+        ctx.fillText("No NAV history yet — data arrives each worker cycle", 16, 28);
         return;
       }
-      const pad = 28;
-      const min = Math.min(...values);
-      const max = Math.max(...values);
-      const range = max === min ? 1 : max - min;
-      ctx.strokeStyle = "#d8dee8";
-      ctx.lineWidth = 1;
-      for (let i = 0; i < 4; i++) {
-        const y = pad + i * ((height - pad * 2) / 3);
-        ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(width - pad, y); ctx.stroke();
+
+      const PL = 72, PR = 12, PT = 20, PB = 36;
+      const chartW = W - PL - PR;
+      const chartH = H - PT - PB;
+      const minV = Math.min(...navVals);
+      const maxV = Math.max(...navVals);
+      const rangeV = maxV === minV ? 1 : maxV - minV;
+
+      // Y grid + labels
+      const ySteps = 4;
+      ctx.font = "10px system-ui";
+      ctx.textAlign = "right";
+      for (let i = 0; i <= ySteps; i++) {
+        const val = minV + (rangeV / ySteps) * i;
+        const y   = PT + chartH - (i / ySteps) * chartH;
+        ctx.strokeStyle = "#edf0f5";
+        ctx.lineWidth   = 1;
+        ctx.beginPath(); ctx.moveTo(PL, y); ctx.lineTo(PL + chartW, y); ctx.stroke();
+        ctx.fillStyle = "#94a3b8";
+        ctx.fillText(fmtMoney(val), PL - 4, y + 3);
       }
-      const positive = values[values.length - 1] >= values[0];
-      ctx.strokeStyle = positive ? "#0f766e" : "#b91c1c";
-      ctx.lineWidth = 2;
+
+      // X labels (up to 6 evenly spaced)
+      const xCount = Math.min(6, points.length - 1);
+      ctx.textAlign = "center";
+      for (let i = 0; i <= xCount; i++) {
+        const idx  = Math.round(i * (points.length - 1) / xCount);
+        const x    = PL + (idx / (points.length - 1)) * chartW;
+        const d    = new Date(points[idx].time);
+        const hh   = String(d.getHours()).padStart(2,"0");
+        const mm   = String(d.getMinutes()).padStart(2,"0");
+        const lbl  = `${d.getMonth()+1}/${d.getDate()} ${hh}:${mm}`;
+        ctx.fillStyle = "#94a3b8";
+        ctx.fillText(lbl, x, H - PB + 14);
+      }
+
+      // Line + fill
+      const positive = navVals[navVals.length - 1] >= navVals[0];
+      const lineColor = positive ? "#0f766e" : "#b91c1c";
+      const fillColor = positive ? "rgba(15,118,110,0.08)" : "rgba(185,28,28,0.06)";
+
       ctx.beginPath();
-      values.forEach((value, index) => {
-        const x = pad + (index / (values.length - 1)) * (width - pad * 2);
-        const y = height - pad - ((value - min) / range) * (height - pad * 2);
-        if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      navVals.forEach((v, i) => {
+        const x = PL + (i / (navVals.length - 1)) * chartW;
+        const y = PT + chartH - ((v - minV) / rangeV) * chartH;
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
       });
+      ctx.strokeStyle = lineColor;
+      ctx.lineWidth   = 2;
       ctx.stroke();
+
+      // Area fill under line
+      ctx.lineTo(PL + chartW, PT + chartH);
+      ctx.lineTo(PL, PT + chartH);
+      ctx.closePath();
+      ctx.fillStyle = fillColor;
+      ctx.fill();
+
+      // Current NAV label top-left
       ctx.fillStyle = "#263241";
-      ctx.font = "12px system-ui";
-      ctx.fillText(fmtMoney(values[values.length - 1]), pad, 18);
+      ctx.font      = "bold 13px system-ui";
+      ctx.textAlign = "left";
+      ctx.fillText(fmtMoney(navVals[navVals.length - 1]), PL + 4, PT + 14);
+
+      // Hover tooltip
+      canvas._navPoints = points;
+      canvas._navMeta   = { PL, PR, PT, PB, chartW, chartH, minV, rangeV };
     }
+
+    // Tooltip on hover
+    (function setupNavTooltip() {
+      const canvas  = document.getElementById("nav-chart");
+      const tooltip = document.createElement("div");
+      tooltip.style.cssText =
+        "position:fixed;background:#1e293b;color:#f1f5f9;padding:6px 10px;" +
+        "border-radius:6px;font-size:12px;pointer-events:none;display:none;z-index:99";
+      document.body.appendChild(tooltip);
+
+      canvas.addEventListener("mousemove", e => {
+        const pts = canvas._navPoints;
+        const m   = canvas._navMeta;
+        if (!pts || pts.length < 2 || !m) return;
+        const rect = canvas.getBoundingClientRect();
+        const mx   = e.clientX - rect.left;
+        if (mx < m.PL || mx > m.PL + m.chartW) { tooltip.style.display = "none"; return; }
+        const frac = (mx - m.PL) / m.chartW;
+        const idx  = Math.round(frac * (pts.length - 1));
+        const pt   = pts[Math.max(0, Math.min(idx, pts.length - 1))];
+        const d    = new Date(pt.time);
+        tooltip.innerHTML =
+          `<b>${fmtMoney(pt.nav)}</b><br>` +
+          `${d.toLocaleDateString()} ${d.toLocaleTimeString()}`;
+        tooltip.style.display = "block";
+        tooltip.style.left    = (e.clientX + 14) + "px";
+        tooltip.style.top     = (e.clientY - 10) + "px";
+      });
+      canvas.addEventListener("mouseleave", () => { tooltip.style.display = "none"; });
+    })();
     async function loadFills() {
       const cols = [
         { label: "Time",     render: x => new Date(x.created_at).toLocaleTimeString() },
@@ -739,9 +851,10 @@ DASHBOARD_HTML = """
     }
     document.getElementById("pipeline-start").value = isoDate(45);
     document.getElementById("pipeline-end").value = isoDate(1);
+    setNavRange(0); // inicializa con "All" activo
     refresh();
     setInterval(refresh, 15000);
-    window.addEventListener("resize", () => refresh());
+    window.addEventListener("resize", () => { drawNavChart(); });
   </script>
 </body>
 </html>
