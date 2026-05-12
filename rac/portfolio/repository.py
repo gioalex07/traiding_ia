@@ -228,6 +228,42 @@ class PortfolioRepository:
                 )
             conn.commit()
 
+    def daily_pnl(self, environment: str = "paper", days: int = 14) -> list[dict[str, object]]:
+        """Returns one row per calendar day with the day's realized P&L and closing NAV."""
+        safe_days = max(1, min(days, 90))
+        with psycopg.connect(self._database_url, row_factory=dict_row) as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT
+                        time::date                           AS date,
+                        (array_agg(nav ORDER BY time DESC))[1] AS nav_close,
+                        (array_agg(nav ORDER BY time ASC))[1]  AS nav_open
+                    FROM portfolio_snapshots
+                    WHERE environment = %s
+                      AND time >= now() - INTERVAL '1 day' * %s
+                    GROUP BY time::date
+                    ORDER BY date ASC
+                    """,
+                    (environment, safe_days),
+                )
+                rows = list(cursor.fetchall())
+                result = []
+                for i, row in enumerate(rows):
+                    nav_close = float(row["nav_close"])
+                    if i == 0:
+                        nav_prev = float(row["nav_open"])
+                    else:
+                        nav_prev = float(rows[i - 1]["nav_close"])
+                    pnl = nav_close - nav_prev
+                    result.append({
+                        "date": str(row["date"]),
+                        "nav": nav_close,
+                        "pnl": round(pnl, 2),
+                        "pnl_pct": round(pnl / nav_prev * 100, 3) if nav_prev else 0.0,
+                    })
+                return result
+
     def peak_nav(self, environment: str = "paper") -> float:
         with psycopg.connect(self._database_url) as conn:
             with conn.cursor() as cursor:

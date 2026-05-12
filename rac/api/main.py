@@ -585,6 +585,12 @@ async def get_backtest(backtest_id: str) -> dict[str, object]:
     return result
 
 
+@app.get("/portfolio/daily-pnl")
+async def portfolio_daily_pnl(environment: str = "paper", days: int = 14) -> list[dict[str, object]]:
+    settings = load_settings()
+    return PortfolioRepository(settings).daily_pnl(environment=environment, days=days)
+
+
 @app.get("/portfolio/live-positions")
 async def live_positions(environment: str = "paper") -> list[dict[str, object]]:
     settings = load_settings()

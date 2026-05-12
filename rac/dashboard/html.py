@@ -154,6 +154,7 @@ DASHBOARD_HTML = """
       System
     </div>
   </nav>
+  <div id="sb-prices" style="padding:10px 14px;border-top:1px solid #1e293b;display:flex;flex-direction:column;gap:5px"></div>
   <div class="sb-status">
     <div class="sb-badge"><div class="dot dot-green" id="sb-worker-dot"></div><span id="sb-worker-status" style="color:var(--sb-text);font-size:11px">Worker</span></div>
     <div class="sb-badge"><div class="dot" id="sb-ks-dot" style="background:var(--good)"></div><span id="sb-ks-status" style="color:var(--sb-text);font-size:11px">Kill Switch</span></div>
@@ -205,6 +206,17 @@ DASHBOARD_HTML = """
           <div class="kpi-label">Alpaca Equity</div>
           <div class="kpi-value" id="kpi-equity">—</div>
           <div class="kpi-sub muted" id="kpi-equity-sub"></div>
+        </div>
+      </div>
+
+      <!-- Daily P&L bar chart -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Daily P&L — last 14 days</span>
+          <span id="pnl-chart-total" class="muted" style="font-size:12px"></span>
+        </div>
+        <div class="card-body" style="padding:10px 16px">
+          <canvas id="pnl-chart" style="height:120px"></canvas>
         </div>
       </div>
 
@@ -573,9 +585,14 @@ async function refresh(){
 
   // Charts
   drawNavChart(hist||[]);
+  loadDailyPnl();
+
+  // Sidebar ticker
+  loadLivePositions().then(() => {
+    updateSidebarPrices(_lastLivePos, brkPos);
+  });
 
   // Section-specific
-  loadLivePositions();
   if(currentSection==='portfolio') { loadFills(); loadTradeOutcomes(); }
   if(currentSection==='trading')   { loadStrategyPerformance(); }
   if(currentSection==='ml')        { loadMlStats(); }
@@ -583,11 +600,95 @@ async function refresh(){
   if(currentSection==='backtest')  { loadBacktests(); }
 }
 
+// ── Sidebar price ticker ─────────────────────────────────────
+function updateSidebarPrices(livePositions, brokerPositions) {
+  const sb = $('sb-prices');
+  if (!sb) return;
+  // Combine: show prices from live positions + broker positions without a RAC position
+  const shown = {};
+  (livePositions || []).forEach(p => {
+    shown[p.symbol] = {
+      price: p.current_price,
+      pnl_pct: p.pnl_pct,
+      has_position: true,
+    };
+  });
+  (brokerPositions || []).forEach(p => {
+    if (!shown[p.symbol]) shown[p.symbol] = { price: p.market_value / p.quantity, pnl_pct: null, has_position: true };
+  });
+  if (!Object.keys(shown).length) { sb.innerHTML = ''; return; }
+  sb.innerHTML = Object.entries(shown).map(([sym, d]) => {
+    const col = d.pnl_pct == null ? '#94a3b8' : d.pnl_pct >= 0 ? '#10b981' : '#ef4444';
+    const pct = d.pnl_pct != null ? ` <span style="color:${col};font-size:10px">${d.pnl_pct >= 0 ? '+' : ''}${Number(d.pnl_pct).toFixed(2)}%</span>` : '';
+    return `<div style="display:flex;justify-content:space-between;align-items:center">
+      <span style="color:#94a3b8;font-size:11px;font-weight:600">${sym}</span>
+      <span style="color:#e2e8f0;font-size:11px;font-weight:700">${fmtMoney(d.price)}${pct}</span>
+    </div>`;
+  }).join('');
+}
+
+// ── Daily P&L bar chart ───────────────────────────────────────
+let _lastDailyPnl = [];
+async function loadDailyPnl() {
+  try {
+    const r = await fetch('/portfolio/daily-pnl?environment=paper&days=14', { cache: 'no-store' });
+    _lastDailyPnl = await r.json();
+    drawPnlChart(_lastDailyPnl);
+  } catch (_) {}
+}
+function drawPnlChart(days) {
+  const cv = $('pnl-chart');
+  if (!cv || !days.length) return;
+  const sc = window.devicePixelRatio || 1, rc = cv.getBoundingClientRect();
+  cv.width = Math.max(300, Math.floor(rc.width * sc));
+  cv.height = Math.floor(120 * sc);
+  const ctx = cv.getContext('2d');
+  ctx.scale(sc, sc);
+  const W = cv.width / sc, H = cv.height / sc;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+
+  const pnls = days.map(d => d.pnl);
+  const maxAbs = Math.max(...pnls.map(Math.abs), 1);
+  const PT = 12, PB = 22, PL = 10, PR = 10;
+  const chartH = H - PT - PB, chartW = W - PL - PR;
+  const barW = Math.max(4, chartW / days.length - 3);
+  const totalPnl = pnls.reduce((a, b) => a + b, 0);
+  const tot = $('pnl-chart-total');
+  if (tot) {
+    const col = totalPnl >= 0 ? 'var(--good)' : 'var(--bad)';
+    tot.innerHTML = `<span style="color:${col};font-weight:700">${totalPnl >= 0 ? '+' : ''}${fmtMoney(totalPnl)} (14d)</span>`;
+  }
+
+  // Zero line
+  const zeroY = PT + chartH / 2;
+  ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(PL, zeroY); ctx.lineTo(W - PR, zeroY); ctx.stroke();
+
+  days.forEach((d, i) => {
+    const x = PL + i * (chartW / days.length) + (chartW / days.length - barW) / 2;
+    const pct = d.pnl / maxAbs;
+    const barH = Math.max(2, Math.abs(pct) * (chartH / 2 - 4));
+    const positive = d.pnl >= 0;
+    const y = positive ? zeroY - barH : zeroY;
+    ctx.fillStyle = positive ? '#10b981' : '#ef4444';
+    ctx.fillRect(x, y, barW, barH);
+
+    // Date label
+    const dt = new Date(d.date + 'T12:00:00');
+    const lbl = `${dt.getMonth() + 1}/${dt.getDate()}`;
+    ctx.fillStyle = '#94a3b8'; ctx.font = '9px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(lbl, x + barW / 2, H - PB + 12);
+  });
+}
+
 // ── Live Positions ──────────────────────────────────────────
+let _lastLivePos = [];
 async function loadLivePositions(){
   try{
     const r=await fetch('/portfolio/live-positions?environment=paper',{cache:'no-store'});
     const data=await r.json();
+    _lastLivePos = data;
     $('pos-count').textContent=data.length?`${data.length} open`:'no positions';
     if(!data.length){$('live-positions').innerHTML='<span class="muted">No open positions</span>';return;}
     $('live-positions').innerHTML='<div style="display:flex;flex-direction:column;gap:10px">'+data.map(p=>{
@@ -957,7 +1058,7 @@ $('pipeline-end').value=isoDate(1);
 setNavRange(0);
 refresh();
 setInterval(refresh,15000);
-window.addEventListener('resize',()=>{drawNavChart(_navPts);});
+window.addEventListener('resize',()=>{drawNavChart(_navPts);drawPnlChart(_lastDailyPnl);});
 </script>
 </body>
 </html>
