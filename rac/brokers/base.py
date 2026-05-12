@@ -66,6 +66,7 @@ class FillEvent:
     quantity: float
     price: float
     timestamp: str
+    side: str = ""
 
 
 class BrokerAdapter(ABC):

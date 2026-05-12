@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import urllib.error
 import urllib.parse
@@ -20,6 +21,8 @@ from rac.brokers.base import (
 )
 from rac.config import Settings, TradingMode
 from rac.market_data.models import OHLCVBar
+
+log = logging.getLogger("rac.brokers.alpaca")
 
 
 class AlpacaBrokerAdapter(BrokerAdapter):
@@ -162,9 +165,51 @@ class AlpacaBrokerAdapter(BrokerAdapter):
             raise
 
     async def stream_fills(self) -> AsyncIterator[FillEvent]:
-        if False:
-            yield FillEvent("", "", 0, 0, "")
-        raise NotImplementedError("Alpaca fill streaming is not implemented yet")
+        try:
+            import websockets  # type: ignore[import-untyped]
+        except ImportError:
+            raise RuntimeError("websockets not installed — add websockets>=12 to requirements.txt")
+
+        api_key = os.getenv("ALPACA_API_KEY", "")
+        api_secret = os.getenv("ALPACA_API_SECRET", "")
+        if not api_key or not api_secret:
+            raise RuntimeError("alpaca_paper_credentials_missing")
+
+        url = self._trading_stream_url()
+        log.info("alpaca_stream_connecting url=%s", url)
+
+        async with websockets.connect(url) as ws:
+            await ws.send(json.dumps({"action": "auth", "key": api_key, "secret": api_secret}))
+            auth_resp = json.loads(await ws.recv())
+            if auth_resp.get("data", {}).get("status") != "authorized":
+                raise RuntimeError(f"alpaca_stream_auth_failed: {auth_resp}")
+
+            await ws.send(json.dumps({"action": "listen", "data": {"streams": ["trade_updates"]}}))
+            await ws.recv()  # listening confirmation
+
+            log.info("alpaca_stream_ready")
+            async for raw in ws:
+                msg = json.loads(raw)
+                if msg.get("stream") != "trade_updates":
+                    continue
+                event_data = msg.get("data", {})
+                if event_data.get("event") not in ("fill", "partial_fill"):
+                    continue
+                order = event_data.get("order", {})
+                yield FillEvent(
+                    broker_order_id=str(order.get("id", "")),
+                    symbol=str(order.get("symbol", "")),
+                    quantity=float(order.get("filled_qty") or 0),
+                    price=float(order.get("filled_avg_price") or 0),
+                    timestamp=str(order.get("filled_at") or ""),
+                    side=str(order.get("side", "")),
+                )
+
+    def _trading_stream_url(self) -> str:
+        base = os.getenv("ALPACA_PAPER_BASE_URL", "https://paper-api.alpaca.markets/v2")
+        parsed = urllib.parse.urlparse(base)
+        scheme = "wss" if parsed.scheme == "https" else "ws"
+        return f"{scheme}://{parsed.netloc}/stream"
 
     def _data_request_json(self, path: str, params: dict[str, str] | None = None) -> dict[str, object]:
         base_url = os.getenv("ALPACA_DATA_BASE_URL", "https://data.alpaca.markets/v2").rstrip("/")

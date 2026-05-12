@@ -447,6 +447,39 @@ async def _maybe_close_position(
         log.error("close_submit_error symbol=%s reason=%s error=%s", symbol, trigger, exc)
 
 
+async def _fill_stream_worker(
+    settings: Settings,
+    broker: AlpacaBrokerAdapter,
+    alerts: AlertService,
+) -> None:
+    """Background task: consumes Alpaca fill events via WebSocket and reconciles immediately."""
+    backoff = 5
+    while True:
+        try:
+            order_repo = OrderRepository(settings)
+            portfolio_repo = PortfolioRepository(settings)
+            outcomes = TradeOutcomeRepository(settings)
+            recon_svc = ReconciliationService(broker, order_repo, portfolio_repo, alerts, outcomes)
+
+            async for fill in broker.stream_fills():
+                log.info(
+                    "fill_stream_event broker_order_id=%s symbol=%s side=%s qty=%.4f price=%.4f",
+                    fill.broker_order_id, fill.symbol, fill.side, fill.quantity, fill.price,
+                )
+                try:
+                    recon = await recon_svc.reconcile_pending()
+                    if recon.filled:
+                        log.info("fill_stream_reconciled filled=%d errors=%d", recon.filled, len(recon.errors))
+                except Exception as exc:
+                    log.warning("fill_stream_reconcile_error: %s", exc)
+
+            backoff = 5  # reset after clean disconnect
+        except Exception as exc:
+            log.warning("fill_stream_disconnected: %s — reconnecting in %ds", exc, backoff)
+            await asyncio.sleep(backoff)
+            backoff = min(backoff * 2, 120)
+
+
 def _audit(audit: AuditRepository, event_type: str, settings: Settings, payload: dict) -> None:
     try:
         audit.record_event(
@@ -479,6 +512,8 @@ async def main() -> None:
         list(settings.watched_symbols), settings.watched_timeframe, interval,
         alerts._client.configured, ml.available,
     )
+
+    asyncio.create_task(_fill_stream_worker(settings, broker, alerts))
 
     while True:
         started = asyncio.get_event_loop().time()
