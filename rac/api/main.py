@@ -683,7 +683,7 @@ async def ml_label(
     tp_pct: float = 3.0,
     sl_pct: float = 1.0,
     batch_size: int = 500,
-) -> dict[str, object]:
+) -> dict[str, int]:
     settings = load_settings()
     return SignalLabelerService(settings).run(tp_pct=tp_pct, sl_pct=sl_pct, batch_size=batch_size)
 
