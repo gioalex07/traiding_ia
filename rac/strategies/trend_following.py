@@ -5,7 +5,7 @@ from rac.strategies.validation import StrategyValidator
 
 TREND_FOLLOWING_MANIFEST = StrategyManifest(
     strategy_id="trend_following_v1",
-    version="0.1.0",
+    version="0.2.0",
     required_features=["close", "sma_3", "sma_5", "return_1", "volatility_5"],
     stop_loss_pct=1.5,
     take_profit_pct=3.0,
@@ -80,10 +80,18 @@ class TrendFollowingStrategy:
 
     @staticmethod
     def _confidence(values: dict[str, object]) -> float:
-        close = float(values["close"])
-        sma_5 = float(values["sma_5"])
-        volatility_5 = float(values["volatility_5"])
-        distance = abs(close - sma_5) / sma_5 if sma_5 else 0
-        volatility_penalty = min(volatility_5 * 10, 0.4)
-        return max(0.0, min(1.0, 0.5 + distance - volatility_penalty))
+        close     = float(values.get("close")       or 0) or 1.0
+        sma_3     = float(values.get("sma_3")       or 0) or close
+        sma_5     = float(values.get("sma_5")       or 0) or close
+        vol       = float(values.get("volatility_5") or 0)
+
+        # Normalize price distance and SMA spread relative to price scale.
+        # Thresholds tuned for 5-minute bars (0.3% move = meaningful trend).
+        price_gap   = abs(close - sma_5) / sma_5 if sma_5 else 0
+        sma_spread  = abs(sma_3 - sma_5) / sma_5 if sma_5 else 0
+        price_score = min(1.0, price_gap  / 0.003)   # 0.3% gap → score 1
+        spread_score = min(1.0, sma_spread / 0.002)  # 0.2% spread → score 1
+        vol_penalty = min(0.3, vol * 50)              # cap penalty at 0.3
+
+        return max(0.0, min(1.0, 0.5 + price_score * 0.35 + spread_score * 0.25 - vol_penalty))
 

@@ -186,7 +186,7 @@ DASHBOARD_HTML = """
     <!-- ═══ OVERVIEW ══════════════════════════════════════════ -->
     <section class="section active" id="s-overview">
       <!-- KPI row -->
-      <div class="kpi-row">
+      <div class="kpi-row" style="grid-template-columns:repeat(5,1fr)">
         <div class="kpi">
           <div class="kpi-label">NAV (RAC)</div>
           <div class="kpi-value" id="kpi-nav">—</div>
@@ -207,6 +207,19 @@ DASHBOARD_HTML = """
           <div class="kpi-value" id="kpi-equity">—</div>
           <div class="kpi-sub muted" id="kpi-equity-sub"></div>
         </div>
+        <div class="kpi">
+          <div class="kpi-label">Deployed</div>
+          <div class="kpi-value" id="kpi-exposure">—</div>
+          <div class="kpi-sub" id="kpi-exposure-bar" style="margin-top:6px"></div>
+        </div>
+      </div>
+
+      <!-- Quick actions -->
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="sm" onclick="markToMarket()">↻ Mark to Market</button>
+        <button class="sm" onclick="reconcileOrders()">⇄ Reconcile Orders</button>
+        <button class="sm" onclick="checkConsistency()">✓ Check Consistency</button>
+        <span id="quick-action-result" class="muted" style="font-size:11px;align-self:center"></span>
       </div>
 
       <!-- Daily P&L bar chart -->
@@ -540,9 +553,14 @@ async function refresh(){
     $('kpi-dd-bar').innerHTML=`<div class="progress-track"><div class="progress-fill" style="width:${Math.min(dd/5*100,100)}%;background:${ddCol}"></div></div>`;
   }
   if(acct){
-    const eq=Number(acct.equity),pnl=eq-BASELINE,col=pnl>=0?'var(--good)':'var(--bad)';
+    const eq=Number(acct.equity),cash=Number(acct.cash);
+    const pnl=eq-BASELINE,col=pnl>=0?'var(--good)':'var(--bad)';
+    const deployed=eq>0?(eq-cash)/eq*100:0;
+    const depCol=deployed>80?'var(--bad)':deployed>50?'var(--warn)':'var(--good)';
     $('kpi-equity').textContent=fmtMoney(eq);
     $('kpi-equity-sub').innerHTML=`<span style="color:${col}">${pnl>=0?'+':''}${fmtMoney(pnl)} vs $100k</span>`;
+    $('kpi-exposure').innerHTML=`<span style="color:${depCol}">${deployed.toFixed(1)}%</span>`;
+    $('kpi-exposure-bar').innerHTML=`<div class="progress-track"><div class="progress-fill" style="width:${Math.min(deployed,100)}%;background:${depCol}"></div></div><div class="muted" style="font-size:10px;margin-top:2px">${fmtMoney(eq-cash)} deployed</div>`;
     $('equity').textContent=fmtMoney(eq);
     $('cash').textContent=`cash ${fmtMoney(acct.cash)} · buying power ${fmtMoney(acct.buying_power)}`;
   }
@@ -1017,12 +1035,19 @@ async function markToMarket(){
   }catch(e){$('mark-to-market').innerHTML=`<span class="error">${e.message}</span>`;}
 }
 async function reconcileOrders(){
+  const q=$('quick-action-result');
+  if(q) q.textContent='Reconciling…';
   $('reconciliation').innerHTML='<span class="muted">Reconciling…</span>';
   try{
     const r=await fetch('/orders/reconcile',{method:'POST'});const d=await r.json();
+    const msg=`✓ Reconcile: ${d.filled} filled · ${d.pending} pending`;
+    if(q){q.textContent=msg;setTimeout(()=>{q.textContent='';},5000);}
     $('reconciliation').innerHTML=`<span style="font-weight:700">${d.filled} filled</span> <span class="muted">· checked ${d.checked} · pending ${d.pending} · cancelled ${d.cancelled}</span>`;
     refresh();
-  }catch(e){$('reconciliation').innerHTML=`<span class="error">${e.message}</span>`;}
+  }catch(e){
+    if(q) q.textContent='Error reconciling';
+    $('reconciliation').innerHTML=`<span class="error">${e.message}</span>`;
+  }
 }
 async function runPipeline(){
   $('pipeline-result').innerHTML='<span class="muted">Running…</span>';
