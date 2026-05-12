@@ -7,1080 +7,958 @@ DASHBOARD_HTML = """
   <title>RAC Dashboard</title>
   <style>
     :root {
-      --bg: #f6f7f9;
-      --panel: #ffffff;
-      --text: #18202a;
-      --muted: #667085;
-      --line: #d8dee8;
-      --good: #0f766e;
-      --warn: #b45309;
-      --bad: #b91c1c;
-      --ink: #263241;
+      --sb: #0f172a; --sb-hover: #1e293b; --sb-active: #3b82f6; --sb-text: #94a3b8;
+      --bg: #f1f5f9; --panel: #ffffff; --border: #e2e8f0;
+      --text: #0f172a; --muted: #64748b; --ink: #1e293b;
+      --good: #10b981; --warn: #f59e0b; --bad: #ef4444; --blue: #3b82f6;
+      --sb-w: 220px;
     }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--text);
-      font: 14px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-    header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      padding: 18px 24px;
-      background: #111827;
-      color: #fff;
-      border-bottom: 1px solid #0b1220;
-    }
-    h1 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: 0; }
-    .sub { color: #cbd5e1; font-size: 13px; }
-    main { padding: 18px; max-width: 1500px; margin: 0 auto; }
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(12, minmax(0, 1fr));
-      gap: 14px;
-    }
-    .panel {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      min-width: 0;
-      overflow: hidden;
-    }
-    .panel h2 {
-      margin: 0;
-      padding: 12px 14px;
-      font-size: 14px;
-      border-bottom: 1px solid var(--line);
-      background: #fafbfc;
-    }
-    .content { padding: 14px; }
-    .span-3 { grid-column: span 3; }
-    .span-4 { grid-column: span 4; }
-    .span-6 { grid-column: span 6; }
-    .span-8 { grid-column: span 8; }
-    .span-12 { grid-column: span 12; }
-    .metric { display: grid; gap: 4px; }
-    .metric .value { font-size: 24px; font-weight: 750; color: var(--ink); overflow-wrap: anywhere; }
-    .label { color: var(--muted); font-size: 12px; }
-    .status {
-      display: inline-flex;
-      align-items: center;
-      min-height: 28px;
-      padding: 4px 9px;
-      border-radius: 999px;
-      font-weight: 650;
-      border: 1px solid var(--line);
-      background: #f8fafc;
-    }
-    .status.good { color: var(--good); border-color: #99f6e4; background: #ecfdf5; }
-    .status.warn { color: var(--warn); border-color: #fed7aa; background: #fffbeb; }
-    .status.bad { color: var(--bad); border-color: #fecaca; background: #fef2f2; }
-    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-    th, td {
-      padding: 8px 10px;
-      border-bottom: 1px solid #edf0f5;
-      text-align: left;
-      vertical-align: top;
-      overflow-wrap: anywhere;
-    }
-    th { color: var(--muted); font-size: 12px; font-weight: 650; background: #fbfcfe; }
-    tr:last-child td { border-bottom: 0; }
-    .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    button {
-      border: 1px solid var(--line);
-      background: #fff;
-      color: var(--text);
-      border-radius: 6px;
-      padding: 8px 10px;
-      cursor: pointer;
-      min-height: 36px;
-      font-weight: 650;
-    }
-    button.danger { color: #fff; background: var(--bad); border-color: var(--bad); }
-    button.secondary { color: var(--ink); background: #eef2f7; }
-    input, select {
-      width: 100%;
-      min-height: 36px;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 7px 9px;
-      color: var(--text);
-      background: #fff;
-      font: inherit;
-    }
-    .form-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr 1fr 1fr auto;
-      gap: 10px;
-      align-items: end;
-    }
-    .field { display: grid; gap: 5px; min-width: 0; }
-    .pipeline-result {
-      margin-top: 12px;
-      border-top: 1px solid var(--line);
-      padding-top: 12px;
-    }
-    canvas {
-      width: 100%;
-      height: 220px;
-      display: block;
-      border: 1px solid #edf0f5;
-      border-radius: 6px;
-      background: #fff;
-    }
-    pre {
-      white-space: pre-wrap;
-      overflow-wrap: anywhere;
-      margin: 0;
-      color: #334155;
-      font-size: 12px;
-    }
-    .error { color: var(--bad); }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font: 13px/1.5 system-ui,-apple-system,sans-serif; background: var(--bg); color: var(--text); display: flex; height: 100vh; overflow: hidden; }
+
+    /* ── Sidebar ─────────────────────────────────────────── */
+    .sb { width: var(--sb-w); background: var(--sb); display: flex; flex-direction: column; flex-shrink: 0; }
+    .sb-logo { padding: 20px 18px 12px; border-bottom: 1px solid #1e293b; }
+    .sb-logo h1 { color: #fff; font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
+    .sb-logo .tagline { color: var(--sb-text); font-size: 11px; margin-top: 2px; }
+    .sb-nav { flex: 1; padding: 10px 10px; overflow-y: auto; }
+    .nav-section { color: #475569; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 14px 8px 6px; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 7px; color: var(--sb-text); cursor: pointer; transition: all 0.15s; font-size: 13px; font-weight: 500; user-select: none; }
+    .nav-item:hover { background: var(--sb-hover); color: #e2e8f0; }
+    .nav-item.active { background: var(--sb-active); color: #fff; }
+    .nav-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+    .sb-status { padding: 12px 14px; border-top: 1px solid #1e293b; display: flex; flex-direction: column; gap: 8px; }
+    .sb-badge { display: flex; align-items: center; gap: 6px; font-size: 11px; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .dot-green { background: var(--good); }
+    .dot-red { background: var(--bad); }
+    .dot-yellow { background: var(--warn); }
+
+    /* ── Main area ───────────────────────────────────────── */
+    .app { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+
+    /* ── Topbar ──────────────────────────────────────────── */
+    .topbar { background: var(--panel); border-bottom: 1px solid var(--border); padding: 0 20px; height: 56px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: 16px; }
+    .topbar-left { display: flex; align-items: center; gap: 16px; min-width: 0; }
+    .page-title { font-size: 15px; font-weight: 700; color: var(--ink); white-space: nowrap; }
+    .topbar-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    #header-pnl { font-size: 18px; font-weight: 800; }
+    #market-clock { font-size: 12px; }
+    .chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+    .chip-green { background: #ecfdf5; color: var(--good); }
+    .chip-red { background: #fef2f2; color: var(--bad); }
+    .chip-gray { background: #f1f5f9; color: var(--muted); }
+    .chip-yellow { background: #fffbeb; color: var(--warn); }
+    #last-refresh { font-size: 11px; color: var(--muted); }
+    btn, button { border: 1px solid var(--border); background: #fff; color: var(--ink); border-radius: 7px; padding: 6px 12px; cursor: pointer; font: inherit; font-weight: 600; font-size: 12px; transition: background 0.12s; }
+    button:hover { background: #f8fafc; }
+    button.danger { background: var(--bad); color: #fff; border-color: var(--bad); }
+    button.danger:hover { background: #dc2626; }
+    button.primary { background: var(--blue); color: #fff; border-color: var(--blue); }
+    button.sm { padding: 4px 8px; font-size: 11px; }
+
+    /* ── Content ─────────────────────────────────────────── */
+    .content { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+    .section { display: none; flex-direction: column; gap: 16px; }
+    .section.active { display: flex; }
+
+    /* ── Cards & Panels ──────────────────────────────────── */
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    .card-header { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: #fafbfc; }
+    .card-title { font-size: 13px; font-weight: 700; color: var(--ink); }
+    .card-body { padding: 14px 16px; }
+    .card-body.no-pad { padding: 0; }
+
+    /* ── KPI row ─────────────────────────────────────────── */
+    .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .kpi { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }
+    .kpi-label { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .kpi-value { font-size: 24px; font-weight: 800; color: var(--ink); margin-top: 4px; line-height: 1; }
+    .kpi-sub { font-size: 11px; margin-top: 5px; }
+
+    /* ── Two-column grids ────────────────────────────────── */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+    .col-8-4 { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
+
+    /* ── Tables ──────────────────────────────────────────── */
+    table { width: 100%; border-collapse: collapse; }
+    th { font-size: 11px; color: var(--muted); font-weight: 700; padding: 8px 12px; text-align: left; background: #fafbfc; border-bottom: 1px solid var(--border); }
+    td { padding: 9px 12px; border-bottom: 1px solid #f1f5f9; font-size: 12px; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f8fafc; }
+
+    /* ── Misc ────────────────────────────────────────────── */
     .muted { color: var(--muted); }
-    .progress-track {
-      background:#edf0f5; border-radius:4px; height:6px; margin-top:4px; position:relative;
-    }
-    .progress-fill {
-      height:6px; border-radius:4px; transition:width 0.5s;
-    }
-    .market-badge {
-      display:inline-flex; align-items:center; gap:6px;
-      padding:4px 10px; border-radius:999px; font-size:12px; font-weight:700;
-    }
-    .market-badge.open   { background:#ecfdf5; color:#0f766e; }
-    .market-badge.closed { background:#f1f5f9; color:#667085; }
-    .market-badge.pre    { background:#fffbeb; color:#b45309; }
-    @media (max-width: 1000px) {
-      .span-3, .span-4, .span-6, .span-8 { grid-column: span 12; }
-      .form-grid { grid-template-columns: 1fr; }
-      header { align-items: flex-start; flex-direction: column; }
+    .error { color: var(--bad); }
+    .good { color: var(--good); }
+    .warn { color: var(--warn); }
+    .bad  { color: var(--bad);  }
+    canvas { display: block; width: 100%; }
+    input, select { border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; font: inherit; font-size: 12px; color: var(--text); background: #fff; width: 100%; }
+    .field { display: flex; flex-direction: column; gap: 4px; }
+    .field label { font-size: 11px; font-weight: 600; color: var(--muted); }
+    .form-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+    .form-row .field { flex: 1; min-width: 120px; }
+    .progress-track { background: #e2e8f0; border-radius: 4px; height: 6px; }
+    .progress-fill { height: 6px; border-radius: 4px; transition: width 0.4s; }
+    .pos-card { border: 1px solid var(--border); border-radius: 8px; padding: 14px; background: #fff; }
+    .pos-row { display: flex; justify-content: space-between; align-items: flex-start; }
+    .divider { height: 1px; background: var(--border); margin: 10px 0; }
+
+    /* ── Responsive ──────────────────────────────────────── */
+    @media(max-width:900px) {
+      body { flex-direction: column; }
+      .sb { width: 100%; height: auto; flex-direction: row; overflow-x: auto; }
+      .sb-logo, .sb-status, .nav-section { display: none; }
+      .sb-nav { display: flex; flex-direction: row; padding: 8px; gap: 4px; }
+      .nav-item { padding: 7px 12px; white-space: nowrap; }
+      .kpi-row { grid-template-columns: 1fr 1fr; }
+      .grid-2, .grid-3, .col-8-4 { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
-  <header>
-    <div style="display:flex;align-items:center;gap:20px">
-      <div>
-        <h1>RAC</h1>
-        <div class="sub">Robo Advisor / Autonomous Capital</div>
-      </div>
-      <div id="market-clock" style="display:flex;flex-direction:column;gap:2px"></div>
-      <div id="header-pnl" style="display:flex;flex-direction:column;gap:2px"></div>
+<!-- ── Sidebar ─────────────────────────────────────────────── -->
+<aside class="sb">
+  <div class="sb-logo">
+    <h1>RAC</h1>
+    <div class="tagline">Robo Advisor · Autonomous Capital</div>
+  </div>
+  <nav class="sb-nav">
+    <div class="nav-section">Trading</div>
+    <div class="nav-item active" data-sec="overview">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+      Overview
     </div>
-    <div class="actions">
-      <span id="last-refresh" class="sub"></span>
-      <button class="secondary" onclick="refresh()">Refresh</button>
-      <button class="secondary" onclick="markToMarket()">Mark to Market</button>
-      <button class="secondary" onclick="checkConsistency()">Check Consistency</button>
-      <button class="secondary" onclick="reconcileOrders()">Reconcile Orders</button>
-      <button class="danger" onclick="activateKillSwitch()">Kill Switch</button>
-      <button onclick="resetKillSwitch()">Reset</button>
+    <div class="nav-item" data-sec="portfolio">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+      Portfolio
+    </div>
+    <div class="nav-item" data-sec="trading">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+      Signals & Orders
+    </div>
+    <div class="nav-section">Intelligence</div>
+    <div class="nav-item" data-sec="ml">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>
+      Machine Learning
+    </div>
+    <div class="nav-item" data-sec="backtest">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg>
+      Backtests
+    </div>
+    <div class="nav-section">Admin</div>
+    <div class="nav-item" data-sec="system">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      System
+    </div>
+  </nav>
+  <div class="sb-status">
+    <div class="sb-badge"><div class="dot dot-green" id="sb-worker-dot"></div><span id="sb-worker-status" style="color:var(--sb-text);font-size:11px">Worker</span></div>
+    <div class="sb-badge"><div class="dot" id="sb-ks-dot" style="background:var(--good)"></div><span id="sb-ks-status" style="color:var(--sb-text);font-size:11px">Kill Switch</span></div>
+    <div style="color:#475569;font-size:10px" id="sb-refresh"></div>
+  </div>
+</aside>
+
+<!-- ── Main app ─────────────────────────────────────────────── -->
+<div class="app">
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <span class="page-title" id="page-title">Overview</span>
+      <span id="market-clock"></span>
+    </div>
+    <div class="topbar-right">
+      <span id="header-pnl"></span>
+      <span id="last-refresh"></span>
+      <button class="sm" onclick="refresh()">↻ Refresh</button>
+      <button class="sm" onclick="markToMarket()">Mark to Market</button>
+      <button class="sm danger" onclick="activateKillSwitch()">Kill Switch</button>
+      <button class="sm" onclick="resetKillSwitch()">Reset KS</button>
     </div>
   </header>
-  <main>
-    <div class="grid">
-      <section class="panel span-3">
-        <h2>Mode</h2>
-        <div class="content metric">
-          <span id="mode" class="value">-</span>
-          <span id="broker" class="label">-</span>
-        </div>
-      </section>
-      <section class="panel span-3">
-        <h2>Kill Switch</h2>
-        <div class="content">
-          <span id="kill" class="status">-</span>
-          <div id="kill-reason" class="label"></div>
-        </div>
-      </section>
-      <section class="panel span-3">
-        <h2>Alpaca Paper</h2>
-        <div class="content metric">
-          <span id="equity" class="value">-</span>
-          <span id="cash" class="label">-</span>
-        </div>
-      </section>
-      <section class="panel span-3">
-        <h2>Local AI</h2>
-        <div class="content">
-          <span id="ai" class="status">-</span>
-          <div id="ai-models" class="label"></div>
-        </div>
-      </section>
 
-      <section class="panel span-4">
-        <h2>Portfolio Snapshot</h2>
-        <div class="content" id="portfolio-snapshot"></div>
-      </section>
-      <section class="panel span-4">
-        <h2>RAC Positions</h2>
-        <div class="content" id="portfolio-positions"></div>
-      </section>
-      <section class="panel span-4">
-        <h2>Broker Positions</h2>
-        <div class="content" id="broker-positions"></div>
-      </section>
-      <section class="panel span-12">
-        <h2>Open Positions — Live</h2>
-        <div class="content" id="live-positions"><span class="muted">Loading...</span></div>
-      </section>
-      <section class="panel span-6">
-        <h2>Fills Today</h2>
-        <div class="content" id="fills-today"><span class="muted">Loading...</span></div>
-      </section>
-      <section class="panel span-6">
-        <h2>Fills This Week</h2>
-        <div class="content" id="fills-week"><span class="muted">Loading...</span></div>
-      </section>
-      <section class="panel span-12">
-        <h2>Mark to Market</h2>
-        <div class="content" id="mark-to-market">
-          <span class="muted">Run to update NAV from latest available prices</span>
-        </div>
-      </section>
-      <section class="panel span-12">
-        <h2>Portfolio Consistency</h2>
-        <div class="content" id="portfolio-consistency">
-          <span class="muted">Checking RAC positions against Alpaca</span>
-        </div>
-      </section>
-      <section class="panel span-12">
-        <h2>Order Reconciliation</h2>
-        <div class="content" id="reconciliation">
-          <span class="muted">Run to sync submitted paper orders with Alpaca</span>
-        </div>
-      </section>
+  <!-- Content -->
+  <main class="content">
 
-      <section class="panel span-12">
-        <h2>Paper Analysis Pipeline</h2>
-        <div class="content">
-          <div class="form-grid">
-            <label class="field">
-              <span class="label">Symbol</span>
-              <input id="pipeline-symbol" value="AAPL" autocomplete="off">
-            </label>
-            <label class="field">
-              <span class="label">Timeframe</span>
-              <input id="pipeline-timeframe" value="1Day" autocomplete="off">
-            </label>
-            <label class="field">
-              <span class="label">Strategy</span>
+    <!-- ═══ OVERVIEW ══════════════════════════════════════════ -->
+    <section class="section active" id="s-overview">
+      <!-- KPI row -->
+      <div class="kpi-row">
+        <div class="kpi">
+          <div class="kpi-label">NAV (RAC)</div>
+          <div class="kpi-value" id="kpi-nav">—</div>
+          <div class="kpi-sub" id="kpi-nav-sub"></div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">P&L Today</div>
+          <div class="kpi-value" id="kpi-pnl">—</div>
+          <div class="kpi-sub muted" id="kpi-pnl-sub"></div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Drawdown</div>
+          <div class="kpi-value" id="kpi-dd">—</div>
+          <div class="kpi-sub" id="kpi-dd-bar" style="margin-top:6px"></div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Alpaca Equity</div>
+          <div class="kpi-value" id="kpi-equity">—</div>
+          <div class="kpi-sub muted" id="kpi-equity-sub"></div>
+        </div>
+      </div>
+
+      <!-- Live Positions -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Open Positions — Live</span>
+          <span class="muted" style="font-size:11px" id="pos-count"></span>
+        </div>
+        <div class="card-body" id="live-positions"><span class="muted">Loading…</span></div>
+      </div>
+
+      <!-- NAV Chart -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">NAV History</span>
+          <div style="display:flex;gap:6px">
+            <button class="sm" id="nav-7d"  onclick="setNavRange(7)">7d</button>
+            <button class="sm" id="nav-30d" onclick="setNavRange(30)">30d</button>
+            <button class="sm" id="nav-all" onclick="setNavRange(0)">All</button>
+          </div>
+        </div>
+        <div class="card-body" style="padding:10px 16px">
+          <canvas id="nav-chart" style="height:220px"></canvas>
+        </div>
+      </div>
+
+      <!-- Broker status row -->
+      <div class="grid-3">
+        <div class="card">
+          <div class="card-header"><span class="card-title">Mode</span></div>
+          <div class="card-body"><span id="mode" class="kpi-value" style="font-size:16px">—</span><div class="muted" id="broker" style="font-size:11px;margin-top:4px"></div></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Alpaca Account</span></div>
+          <div class="card-body"><span id="equity" class="kpi-value" style="font-size:16px">—</span><div class="muted" id="cash" style="font-size:11px;margin-top:4px"></div></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Local AI</span></div>
+          <div class="card-body"><span id="ai" style="font-size:13px;font-weight:700">—</span><div class="muted" id="ai-models" style="font-size:11px;margin-top:4px"></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ PORTFOLIO ═════════════════════════════════════════ -->
+    <section class="section" id="s-portfolio">
+      <div class="grid-2">
+        <div class="card"><div class="card-header"><span class="card-title">Fills Today</span></div><div class="card-body no-pad" id="fills-today"><div class="card-body muted">Loading…</div></div></div>
+        <div class="card"><div class="card-header"><span class="card-title">Fills This Week</span></div><div class="card-body no-pad" id="fills-week"><div class="card-body muted">Loading…</div></div></div>
+      </div>
+
+      <div class="col-8-4">
+        <div class="card">
+          <div class="card-header"><span class="card-title">Trade Outcomes</span></div>
+          <div class="card-body no-pad" id="trade-outcomes"><div class="card-body muted">Loading…</div></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Strategy P&L</span></div>
+          <div class="card-body no-pad" id="strategy-summary"><div class="card-body muted">Loading…</div></div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card"><div class="card-header"><span class="card-title">RAC Positions</span></div><div class="card-body no-pad" id="portfolio-positions"><div class="card-body muted">Loading…</div></div></div>
+        <div class="card"><div class="card-header"><span class="card-title">Broker Positions</span></div><div class="card-body no-pad" id="broker-positions"><div class="card-body muted">Loading…</div></div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Portfolio Consistency</span>
+          <button class="sm" onclick="checkConsistency()">Check Now</button>
+        </div>
+        <div class="card-body" id="portfolio-consistency"><span class="muted">Click Check Now to verify RAC vs Alpaca positions</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Mark to Market</span>
+          <button class="sm primary" onclick="markToMarket()">Run MTM</button>
+        </div>
+        <div class="card-body" id="mark-to-market"><span class="muted">Click Run MTM to reprice positions from Alpaca</span></div>
+      </div>
+    </section>
+
+    <!-- ═══ SIGNALS & ORDERS ══════════════════════════════════ -->
+    <section class="section" id="s-trading">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Strategy Performance (fills)</span></div>
+        <div class="card-body no-pad" id="strategy-performance"><div class="card-body muted">Loading…</div></div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card"><div class="card-header"><span class="card-title">Latest Signals</span></div><div class="card-body no-pad" id="signals"><div class="card-body muted">Loading…</div></div></div>
+        <div class="card"><div class="card-header"><span class="card-title">Latest Orders</span></div><div class="card-body no-pad" id="orders"><div class="card-body muted">Loading…</div></div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Paper Analysis Pipeline</span>
+        </div>
+        <div class="card-body">
+          <div class="form-row">
+            <div class="field"><label>Symbol</label><input id="pipeline-symbol" value="AAPL"></div>
+            <div class="field"><label>Timeframe</label><input id="pipeline-timeframe" value="1Day"></div>
+            <div class="field"><label>Strategy</label>
               <select id="pipeline-strategy">
                 <option value="trend_following_v1">trend_following_v1</option>
                 <option value="mean_reversion_v1">mean_reversion_v1</option>
               </select>
-            </label>
-            <label class="field"><span class="label">Start</span><input id="pipeline-start" type="date"></label>
-            <label class="field"><span class="label">End</span><input id="pipeline-end" type="date"></label>
-            <button class="secondary" onclick="runPipeline()">Run</button>
+            </div>
+            <div class="field"><label>Start</label><input id="pipeline-start" type="date"></div>
+            <div class="field"><label>End</label><input id="pipeline-end" type="date"></div>
+            <button onclick="runPipeline()">Run</button>
           </div>
-          <div class="pipeline-result" id="pipeline-result"><span class="muted">No run in this session</span></div>
+          <div id="pipeline-result" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)"><span class="muted">No run in this session</span></div>
         </div>
-      </section>
+      </div>
 
-      <section class="panel span-12">
-        <h2>NAV History
-          <span style="float:right;font-weight:normal;font-size:12px;display:flex;gap:6px">
-            <button class="secondary" id="nav-7d"  onclick="setNavRange(7)">7d</button>
-            <button class="secondary" id="nav-30d" onclick="setNavRange(30)">30d</button>
-            <button class="secondary" id="nav-all" onclick="setNavRange(0)">All</button>
-          </span>
-        </h2>
-        <div class="content"><canvas id="nav-chart"></canvas></div>
-      </section>
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Order Reconciliation</span>
+          <button class="sm" onclick="reconcileOrders()">Reconcile</button>
+        </div>
+        <div class="card-body" id="reconciliation"><span class="muted">Click Reconcile to sync submitted orders with Alpaca</span></div>
+      </div>
+    </section>
 
-      <section class="panel span-12">
-        <h2>Worker Config <span class="label" style="font-weight:normal">— applies next cycle</span></h2>
-        <div class="content">
-          <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr 1fr auto">
-            <label class="field">
-              <span class="label">Min Confidence (0–1)</span>
-              <input id="cfg-confidence" type="number" min="0" max="1" step="0.05" value="0.5">
-            </label>
-            <label class="field">
-              <span class="label">Timeframe</span>
-              <select id="cfg-timeframe">
-                <option value="1Min">1Min</option>
-                <option value="5Min" selected>5Min</option>
-                <option value="15Min">15Min</option>
-                <option value="1Hour">1Hour</option>
-                <option value="1Day">1Day</option>
-              </select>
-            </label>
-            <label class="field">
-              <span class="label">Max Signal Age (seconds)</span>
-              <input id="cfg-maxage" type="number" min="60" step="60" value="1200">
-            </label>
-            <label class="field">
-              <span class="label">Symbols (comma-separated)</span>
-              <input id="cfg-symbols" value="AAPL,MSFT,SPY" autocomplete="off">
-            </label>
-            <button class="secondary" onclick="saveWorkerConfig()">Save</button>
+    <!-- ═══ MACHINE LEARNING ══════════════════════════════════ -->
+    <section class="section" id="s-ml">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Signal Labels</span>
+            <button class="sm" onclick="runLabel()">Label Now</button>
+          </div>
+          <div class="card-body" id="ml-stats"><span class="muted">Loading…</span></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Win / Loss Distribution</span></div>
+          <div class="card-body" style="padding:10px 16px">
+            <canvas id="wl-chart" style="height:180px"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Feature Importance</span>
+          <button class="sm primary" onclick="runTrain()">Train Model</button>
+        </div>
+        <div class="card-body" id="ml-train-result">
+          <canvas id="fi-chart" style="height:200px"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ BACKTESTS ═════════════════════════════════════════ -->
+    <section class="section" id="s-backtest">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Backtest History</span></div>
+        <div class="card-body no-pad" id="backtests"><div class="card-body muted">Loading…</div></div>
+      </div>
+    </section>
+
+    <!-- ═══ SYSTEM ════════════════════════════════════════════ -->
+    <section class="section" id="s-system">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header"><span class="card-title">Kill Switch</span></div>
+          <div class="card-body">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+              <span id="kill" style="font-size:14px;font-weight:700">—</span>
+              <span id="kill-reason" class="muted" style="font-size:12px"></span>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="danger" onclick="activateKillSwitch()">Activate</button>
+              <button onclick="resetKillSwitch()">Reset</button>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Bootstrap</span></div>
+          <div class="card-body">
+            <p class="muted" style="font-size:12px;margin-bottom:12px">Run DB migrations. Safe to run multiple times.</p>
+            <button onclick="doBootstrap()">Run Bootstrap</button>
+            <div id="bootstrap-result" style="margin-top:8px"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">Worker Config <span class="muted" style="font-weight:400">— applies on next cycle</span></span></div>
+        <div class="card-body">
+          <div class="form-row">
+            <div class="field" style="max-width:160px"><label>Min Confidence (0–1)</label><input id="cfg-confidence" type="number" min="0" max="1" step="0.05" value="0.5"></div>
+            <div class="field" style="max-width:130px"><label>Timeframe</label>
+              <select id="cfg-timeframe"><option value="1Min">1Min</option><option value="5Min" selected>5Min</option><option value="15Min">15Min</option><option value="1Day">1Day</option></select>
+            </div>
+            <div class="field" style="max-width:160px"><label>Max Signal Age (s)</label><input id="cfg-maxage" type="number" min="60" step="60" value="1200"></div>
+            <div class="field"><label>Symbols</label><input id="cfg-symbols" value="AAPL,MSFT,SPY"></div>
+            <button onclick="saveWorkerConfig()">Save</button>
           </div>
           <div id="cfg-result" style="margin-top:8px"></div>
         </div>
-      </section>
-      <section class="panel span-12">
-        <h2>Audit Trail</h2>
-        <div class="content" id="audit-trail"><span class="muted">Loading...</span></div>
-      </section>
-      <section class="panel span-8">
-        <h2>Trade Outcomes</h2>
-        <div class="content" id="trade-outcomes"><span class="muted">Loading...</span></div>
-      </section>
-      <section class="panel span-4">
-        <h2>Strategy P&L Summary</h2>
-        <div class="content" id="strategy-summary"><span class="muted">Loading...</span></div>
-      </section>
-      <section class="panel span-12">
-        <h2>Strategy Performance (fills)</h2>
-        <div class="content" id="strategy-performance"><span class="muted">Loading...</span></div>
-      </section>
-      <section class="panel span-6"><h2>Latest Signals</h2><div class="content" id="signals"></div></section>
-      <section class="panel span-6"><h2>Latest Orders</h2><div class="content" id="orders"></div></section>
-      <section class="panel span-12"><h2>Backtests</h2><div class="content" id="backtests"></div></section>
-    </div>
-  </main>
-  <script>
-    const fmtMoney = value => {
-      const n = Number(value);
-      if (!Number.isFinite(n)) return "-";
-      return n.toLocaleString(undefined, { style: "currency", currency: "USD" });
-    };
-    const fmtNum = value => {
-      const n = Number(value);
-      if (!Number.isFinite(n)) return "-";
-      return n.toLocaleString(undefined, { maximumFractionDigits: 6 });
-    };
-    function isoDate(daysAgo) {
-      const d = new Date();
-      d.setDate(d.getDate() - daysAgo);
-      return d.toISOString().slice(0, 10);
-    }
-    const unwrap = section => section && section.ok ? section.data : null;
-    const error = section => section && !section.ok
-      ? `<span class="error">${section.error}</span>`
-      : `<span class="muted">No data</span>`;
-    const statusClass = value => (
-      value === true || value === "available" || value === "paper_configured"
-    ) ? "good" : value ? "warn" : "bad";
-    function rows(items, columns) {
-      if (!items || !items.length) return '<span class="muted">No rows</span>';
-      return `<table><thead><tr>${columns.map(c => `<th>${c.label}</th>`).join("")}</tr></thead><tbody>` +
-        items.map(item => `<tr>${columns.map(c => {
-          const value = c.render ? c.render(item) : (item[c.key] ?? "-");
-          return `<td>${value}</td>`;
-        }).join("")}</tr>`).join("") +
-        `</tbody></table>`;
-    }
-    let _cfgFocused = false;
-    document.addEventListener("DOMContentLoaded", () => {
-      ["cfg-confidence", "cfg-symbols", "cfg-timeframe", "cfg-maxage"].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) {
-          el.addEventListener("focus", () => { _cfgFocused = true; });
-          el.addEventListener("blur",  () => { _cfgFocused = false; });
-        }
-      });
-    });
-    async function loadWorkerConfig() {
-      if (_cfgFocused) return;
-      try {
-        const resp = await fetch("/admin/worker-config", { cache: "no-store" });
-        const data = await resp.json();
-        const map  = Object.fromEntries(data.map(x => [x.key, x.value]));
-        if (map.min_signal_confidence)
-          document.getElementById("cfg-confidence").value = map.min_signal_confidence;
-        if (map.watched_symbols)
-          document.getElementById("cfg-symbols").value = map.watched_symbols;
-        if (map.watched_timeframe)
-          document.getElementById("cfg-timeframe").value = map.watched_timeframe;
-        if (map.signal_max_age_seconds)
-          document.getElementById("cfg-maxage").value = map.signal_max_age_seconds;
-      } catch (_) {}
-    }
-    async function saveWorkerConfig() {
-      const confidence = document.getElementById("cfg-confidence").value.trim();
-      const symbols    = document.getElementById("cfg-symbols").value.trim();
-      const timeframe  = document.getElementById("cfg-timeframe").value.trim();
-      const maxage     = document.getElementById("cfg-maxage").value.trim();
-      const resultEl   = document.getElementById("cfg-result");
-      if (!confidence || !symbols || !timeframe || !maxage) {
-        resultEl.innerHTML = '<span class="error">All fields are required</span>';
-        return;
-      }
-      try {
-        await Promise.all([
-          fetch("/admin/worker-config/min_signal_confidence", {
-            method: "PUT", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ value: confidence, actor: "dashboard" }),
-          }),
-          fetch("/admin/worker-config/watched_symbols", {
-            method: "PUT", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ value: symbols, actor: "dashboard" }),
-          }),
-          fetch("/admin/worker-config/watched_timeframe", {
-            method: "PUT", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ value: timeframe, actor: "dashboard" }),
-          }),
-          fetch("/admin/worker-config/signal_max_age_seconds", {
-            method: "PUT", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ value: maxage, actor: "dashboard" }),
-          }),
-        ]);
-        resultEl.innerHTML = '<span style="color:var(--good)">Saved — applies on next worker cycle</span>';
-        setTimeout(() => { resultEl.innerHTML = ""; }, 4000);
-      } catch (e) {
-        resultEl.innerHTML = `<span class="error">${e.message}</span>`;
-      }
-    }
+      </div>
 
-    async function loadTradeOutcomes() {
-      try {
-        const [rOut, rSum] = await Promise.all([
-          fetch("/trade-outcomes?environment=paper&limit=15", { cache: "no-store" }),
-          fetch("/trade-outcomes/summary?environment=paper",  { cache: "no-store" }),
-        ]);
-        const outcomes = await rOut.json();
-        const summary  = await rSum.json();
+      <div class="card">
+        <div class="card-header"><span class="card-title">Audit Trail</span></div>
+        <div class="card-body no-pad" id="audit-trail"><div class="card-body muted">Loading…</div></div>
+      </div>
+    </section>
 
-        document.getElementById("trade-outcomes").innerHTML = outcomes.length
-          ? rows(outcomes, [
-              { label: "Closed",    render: x => new Date(x.closed_at).toLocaleTimeString() },
-              { label: "Symbol",    key: "symbol" },
-              { label: "Strategy",  render: x => x.strategy_id.replace("_v1","") },
-              { label: "Reason",    key: "close_reason" },
-              { label: "Entry",     render: x => fmtMoney(x.open_price) },
-              { label: "Exit",      render: x => fmtMoney(x.close_price) },
-              { label: "P&L",       render: x => {
-                const n = Number(x.realized_pnl);
-                const p = Number(x.pnl_pct);
-                const c = n >= 0 ? "good" : "bad";
-                return `<span style="color:var(--${c})">${fmtMoney(n)} (${p>=0?"+":""}${p.toFixed(2)}%)</span>`;
-              }},
-              { label: "Duration",  render: x => {
-                const s = Number(x.duration_seconds);
-                return s < 3600 ? `${Math.round(s/60)}m` : `${(s/3600).toFixed(1)}h`;
-              }},
-            ])
-          : '<span class="muted">No closed trades yet</span>';
+  </main><!-- end .content -->
+</div><!-- end .app -->
 
-        document.getElementById("strategy-summary").innerHTML = summary.length
-          ? rows(summary, [
-              { label: "Strategy",   render: x => x.strategy_id.replace("_v1","") },
-              { label: "Trades",     key: "trades" },
-              { label: "W/L",        render: x => `${x.wins}/${x.losses}` },
-              { label: "Total P&L",  render: x => {
-                const n = Number(x.total_pnl);
-                const c = n >= 0 ? "good" : "bad";
-                return `<span style="color:var(--${c})">${fmtMoney(n)}</span>`;
-              }},
-              { label: "Avg %",      render: x => {
-                const p = Number(x.avg_pnl_pct);
-                const c = p >= 0 ? "good" : "bad";
-                return `<span style="color:var(--${c})">${p>=0?"+":""}${p.toFixed(2)}%</span>`;
-              }},
-            ])
-          : '<span class="muted">No closed trades yet</span>';
-      } catch (e) {
-        document.getElementById("trade-outcomes").innerHTML = `<span class="error">${e.message}</span>`;
-      }
-    }
+<script>
+// ── Utilities ───────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const fmtMoney = v => { const n=Number(v); return Number.isFinite(n)?n.toLocaleString(undefined,{style:'currency',currency:'USD'}):'-'; };
+const fmtNum   = v => { const n=Number(v); return Number.isFinite(n)?n.toLocaleString(undefined,{maximumFractionDigits:4}):'-'; };
+const fmtPct   = v => { const n=Number(v); return Number.isFinite(n)?(n>=0?'+':'')+n.toFixed(2)+'%':'-'; };
+const isoDate  = d => { const dt=new Date(); dt.setDate(dt.getDate()-d); return dt.toISOString().slice(0,10); };
+const unwrap   = s => s&&s.ok?s.data:null;
+const errMsg   = s => s&&!s.ok?`<span class="error">${s.error}</span>`:`<span class="muted">No data</span>`;
 
-    async function loadAuditTrail() {
-      try {
-        const resp = await fetch("/audit/events?environment=paper&limit=20", { cache: "no-store" });
-        const data = await resp.json();
-        document.getElementById("audit-trail").innerHTML = data.length
-          ? rows(data, [
-              { label: "Time", render: x => new Date(x.created_at).toLocaleTimeString() },
-              { label: "Event", key: "event_type" },
-              { label: "Actor", key: "actor" },
-              { label: "Correlation", render: x => String(x.correlation_id).slice(0, 24) + "…" },
-            ])
-          : '<span class="muted">No audit events yet</span>';
-      } catch (e) {
-        document.getElementById("audit-trail").innerHTML = `<span class="error">${e.message}</span>`;
-      }
-    }
+function rows(items, cols) {
+  if (!items||!items.length) return '<div style="padding:12px" class="muted">No data</div>';
+  return `<table><thead><tr>${cols.map(c=>`<th>${c.label}</th>`).join('')}</tr></thead><tbody>`+
+    items.map(r=>`<tr>${cols.map(c=>`<td>${c.render?c.render(r):(r[c.key]??'-')}</td>`).join('')}</tr>`).join('')+
+    `</tbody></table>`;
+}
 
-    async function loadStrategyPerformance() {
-      try {
-        const resp = await fetch("/strategies/performance?environment=paper", { cache: "no-store" });
-        const data = await resp.json();
-        document.getElementById("strategy-performance").innerHTML = data.length
-          ? rows(data, [
-              { label: "Strategy", key: "strategy_id" },
-              { label: "Buys", key: "buys" },
-              { label: "Sells", key: "sells" },
-              { label: "Bought", render: x => fmtMoney(x.buy_notional) },
-              { label: "Sold", render: x => fmtMoney(x.sell_notional) },
-              { label: "Realized P&L", render: x => {
-                  const n = Number(x.realized_pnl);
-                  const cls = n >= 0 ? "good" : "bad";
-                  return `<span style="color:var(--${cls})">${fmtMoney(n)}</span>`;
-              }},
-            ])
-          : '<span class="muted">No fills recorded yet</span>';
-      } catch (e) {
-        document.getElementById("strategy-performance").innerHTML = `<span class="error">${e.message}</span>`;
-      }
-    }
+// ── Navigation ──────────────────────────────────────────────
+const TITLES = {overview:'Overview',portfolio:'Portfolio',trading:'Signals & Orders',ml:'Machine Learning',backtest:'Backtests',system:'System'};
+let currentSection = 'overview';
 
-    async function refresh() {
-      const response = await fetch("/dashboard/data", { cache: "no-store" });
-      const data = await response.json();
-      const caps = unwrap(data.capabilities) || {};
-      const kill = unwrap(data.kill_switch) || {};
-      const ai = unwrap(data.ai) || {};
-      const account = unwrap(data.broker_account);
-      const brokerPositions = unwrap(data.broker_positions);
-      const snapshot = unwrap(data.portfolio_snapshot);
-      const portfolioHistory = unwrap(data.portfolio_history);
-      const racPositions = unwrap(data.portfolio_positions);
-      const consistency = unwrap(data.portfolio_consistency);
-      const orders = unwrap(data.orders);
-      const signals = unwrap(data.signals);
-      const backtests = unwrap(data.backtests);
+document.querySelectorAll('.nav-item[data-sec]').forEach(el => {
+  el.addEventListener('click', () => {
+    document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+    document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+    el.classList.add('active');
+    currentSection = el.dataset.sec;
+    $('s-'+currentSection).classList.add('active');
+    $('page-title').textContent = TITLES[currentSection]||currentSection;
+    loadSection(currentSection);
+  });
+});
 
-      document.getElementById("mode").textContent = caps.trading_mode || "-";
-      document.getElementById("broker").textContent = `${caps.broker_configured || "-"} / ${caps.broker_status || "-"}`;
-      document.getElementById("kill").textContent = kill.active ? "ACTIVE" : "inactive";
-      document.getElementById("kill").className = `status ${kill.active ? "bad" : "good"}`;
-      document.getElementById("kill-reason").textContent = kill.reason || "";
-      document.getElementById("equity").textContent = account ? fmtMoney(account.equity) : "-";
-      document.getElementById("cash").textContent = account
-        ? `cash ${fmtMoney(account.cash)} / buying power ${fmtMoney(account.buying_power)}`
-        : error(data.broker_account);
-      document.getElementById("ai").textContent = ai.status || "-";
-      document.getElementById("ai").className = `status ${statusClass(ai.status)}`;
-      document.getElementById("ai-models").textContent = (ai.models || []).join(", ");
-      if (snapshot && Object.keys(snapshot).length) {
-        const dd = Math.max(0, Number(snapshot.drawdown) || 0);
-        const maxDd = 5;
-        const ddPct = Math.min(dd / maxDd * 100, 100);
-        const ddColor = dd < 2 ? "good" : dd < 4 ? "warn" : "bad";
-        const pnl = Number(snapshot.pnl_daily) || 0;
-        const pnlSign = pnl >= 0 ? "+" : "";
-        const pnlColor = pnl >= 0 ? "good" : "bad";
-        document.getElementById("portfolio-snapshot").innerHTML = `
-          <div class="metric">
-            <span class="value">${fmtMoney(snapshot.nav)}</span>
-            <span class="label">
-              cash ${fmtMoney(snapshot.cash)} &nbsp;·&nbsp;
-              <span style="color:var(--${pnlColor})">${pnlSign}${fmtMoney(pnl)} today</span>
-            </span>
-          </div>
-          <div style="margin-top:10px">
-            <div class="label" style="display:flex;justify-content:space-between">
-              <span>Drawdown</span><span style="color:var(--${ddColor})">${dd.toFixed(2)}%</span>
-            </div>
-            <div style="background:#edf0f5;border-radius:4px;height:8px;margin-top:4px">
-              <div style="background:var(--${ddColor});width:${ddPct}%;height:8px;
-                border-radius:4px;transition:width 0.4s"></div>
-            </div>
-            <div class="label" style="text-align:right;margin-top:2px">max ${maxDd}%</div>
-          </div>`;
-      } else {
-        document.getElementById("portfolio-snapshot").innerHTML = error(data.portfolio_snapshot);
-      }
-      document.getElementById("portfolio-positions").innerHTML = rows(racPositions, [
-        { label: "Symbol", key: "symbol" }, { label: "Qty", render: x => fmtNum(x.quantity) },
-        { label: "Avg", render: x => fmtMoney(x.average_price) },
-        { label: "Value", render: x => fmtMoney(x.market_value) }
-      ]);
-      document.getElementById("broker-positions").innerHTML = rows(brokerPositions, [
-        { label: "Symbol", key: "symbol" }, { label: "Qty", render: x => fmtNum(x.quantity) },
-        { label: "Value", render: x => fmtMoney(x.market_value) }
-      ]);
-      if (consistency) {
-        renderConsistency(consistency);
-      } else {
-        document.getElementById("portfolio-consistency").innerHTML = error(data.portfolio_consistency);
-      }
-      document.getElementById("signals").innerHTML = rows(signals, [
-        { label: "Time",     render: x => new Date(x.time).toLocaleTimeString() },
-        { label: "Symbol",   key: "symbol" },
-        { label: "Dir",      render: x => {
-          const c = x.direction==="buy" ? "good" : x.direction==="sell" ? "bad" : "muted";
-          return `<span style="color:var(--${c});font-weight:650">${x.direction.toUpperCase()}</span>`;
-        }},
-        { label: "Conf",     render: x => {
-          const v = Number(x.confidence);
-          const c = v >= 0.7 ? "good" : v >= 0.5 ? "warn" : "muted";
-          return `<span style="color:var(--${c})">${v.toFixed(3)}</span>`;
-        }},
-        { label: "Strategy", render: x => x.strategy_id.replace("_v1","") },
-      ]);
-      document.getElementById("orders").innerHTML = rows(orders, [
-        { label: "Time",   render: x => new Date(x.created_at).toLocaleTimeString() },
-        { label: "Symbol", key: "symbol" },
-        { label: "Side",   render: x => {
-          const c = x.side==="buy" ? "good" : "bad";
-          return `<span style="color:var(--${c});font-weight:650">${x.side.toUpperCase()}</span>`;
-        }},
-        { label: "Status", render: x => {
-          const c = x.status==="filled" ? "good" : x.status==="submitted" ? "warn" : "muted";
-          return `<span style="color:var(--${c})">${x.status}</span>`;
-        }},
-        { label: "Price",  render: x => fmtMoney(x.filled_price || x.estimated_price) },
-      ]);
-      document.getElementById("backtests").innerHTML = rows(backtests, [
-        { label: "Symbol",   key: "symbol" },
-        { label: "Strategy", key: "strategy_id" },
-        { label: "Created",  render: x => new Date(x.created_at).toLocaleDateString() },
-      ]);
-      loadNavHistory();
-      document.getElementById("last-refresh").textContent = new Date().toLocaleTimeString();
-      if (account) updateHeaderPnl(account.equity);
-      loadLivePositions();
-      loadFills();
-      loadTradeOutcomes();
-      loadWorkerConfig();
-      loadAuditTrail();
-      loadStrategyPerformance();
-    }
-    function renderConsistency(data) {
-      const className = data.status === "ok" ? "good" : data.status === "degraded" ? "warn" : "bad";
-      document.getElementById("portfolio-consistency").innerHTML = `
-        <span class="status ${className}">${data.status}</span>
-        <div class="label">order gate ${data.block_order_execution ? "blocked" : "open"}</div>
-        ${rows(data.diffs, [
-          { label: "Symbol", key: "symbol" },
-          { label: "Severity", key: "severity" },
-          { label: "RAC Qty", render: x => fmtNum(x.rac_quantity) },
-          { label: "Broker Qty", render: x => fmtNum(x.broker_quantity) },
-          { label: "Qty Diff", render: x => fmtNum(x.quantity_diff) },
-          { label: "Reasons", render: x => (x.reasons || []).join(", ") || "-" }
-        ])}
-      `;
-    }
-    async function checkConsistency() {
-      const resultEl = document.getElementById("portfolio-consistency");
-      resultEl.innerHTML = '<span class="muted">Checking portfolio consistency...</span>';
-      try {
-        const response = await fetch("/portfolio/consistency?environment=paper", { cache: "no-store" });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || response.statusText);
-        renderConsistency(data);
-      } catch (err) {
-        resultEl.innerHTML = `<span class="error">${err.message}</span>`;
-      }
-    }
-    async function markToMarket() {
-      const resultEl = document.getElementById("mark-to-market");
-      resultEl.innerHTML = '<span class="muted">Updating paper NAV...</span>';
-      try {
-        const response = await fetch(
-          "/portfolio/mark-to-market?environment=paper&timeframe=1Day",
-          { method: "POST" }
-        );
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || response.statusText);
-        resultEl.innerHTML = `
-          <div class="metric">
-            <span class="value">${fmtMoney(data.nav)}</span>
-            <span class="label">
-              cash ${fmtMoney(data.cash)} / positions ${fmtMoney(data.positions_value)} / ${data.status}
-            </span>
-          </div>
-          ${rows(data.positions, [
-            { label: "Symbol", key: "symbol" },
-            { label: "Qty", render: x => fmtNum(x.quantity) },
-            { label: "Last", render: x => fmtMoney(x.latest_price) },
-            { label: "Unrealized", render: x => fmtMoney(x.unrealized_pnl) },
-            { label: "Error", render: x => x.error || "-" }
-          ])}
-        `;
-        refresh();
-      } catch (err) {
-        resultEl.innerHTML = `<span class="error">${err.message}</span>`;
-      }
-    }
-    async function reconcileOrders() {
-      const resultEl = document.getElementById("reconciliation");
-      resultEl.innerHTML = '<span class="muted">Reconciling submitted orders...</span>';
-      try {
-        const response = await fetch("/orders/reconcile", { method: "POST" });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || response.statusText);
-        resultEl.innerHTML = `
-          <div class="metric">
-            <span class="value">${data.filled} filled</span>
-            <span class="label">
-              checked ${data.checked} / pending ${data.pending} / cancelled ${data.cancelled}
-            </span>
-          </div>
-          <pre>${JSON.stringify(data.errors || [], null, 2)}</pre>
-        `;
-        refresh();
-      } catch (err) {
-        resultEl.innerHTML = `<span class="error">${err.message}</span>`;
-      }
-    }
-    async function runPipeline() {
-      const resultEl = document.getElementById("pipeline-result");
-      resultEl.innerHTML = '<span class="muted">Running paper analysis...</span>';
-      const payload = {
-        symbol: document.getElementById("pipeline-symbol").value.trim().toUpperCase(),
-        timeframe: document.getElementById("pipeline-timeframe").value.trim(),
-        strategy_id: document.getElementById("pipeline-strategy").value,
-        start: `${document.getElementById("pipeline-start").value}T00:00:00Z`,
-        end: `${document.getElementById("pipeline-end").value}T23:59:59Z`,
-        feature_set: "technical_v1",
-        limit: 300,
-        explain: true
-      };
-      try {
-        const response = await fetch("/pipeline/paper/run", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || response.statusText);
-        resultEl.innerHTML = `
-          <div class="metric">
-            <span class="value">${data.latest_signal_direction || "no signal"}</span>
-            <span class="label">
-              ${data.symbol} ${data.timeframe} / fetched ${data.fetched}, accepted ${data.accepted},
-              features ${data.features_computed}, signals ${data.signals_generated}
-            </span>
-          </div>
-          <pre>${data.ai_explanation || `AI status: ${data.ai_status || "not_requested"}`}</pre>
-        `;
-        refresh();
-      } catch (err) {
-        resultEl.innerHTML = `<span class="error">${err.message}</span>`;
-      }
-    }
-    // ── Market Clock ───────────────────────────────────────────────────
-    const BASELINE_CAPITAL = 100000;
+function loadSection(sec) {
+  if (sec==='ml')      { loadMlStats(); }
+  if (sec==='backtest'){ loadBacktests(); }
+  if (sec==='system')  { loadAuditTrail(); loadWorkerConfig(); }
+  if (sec==='portfolio'){ loadFills(); loadTradeOutcomes(); }
+  if (sec==='trading') { loadStrategyPerformance(); }
+}
 
-    function isDST(d) {
-      const jan = new Date(d.getFullYear(), 0, 1);
-      const jul = new Date(d.getFullYear(), 6, 1);
-      return d.getTimezoneOffset() < Math.max(jan.getTimezoneOffset(), jul.getTimezoneOffset());
-    }
-    function toET(d) {
-      const off = isDST(d) ? -4 : -5;
-      return new Date(d.getTime() + (d.getTimezoneOffset() + off * 60) * 60000);
-    }
-    function fmtCountdown(ms) {
-      if (ms <= 0) return "0m";
-      const h = Math.floor(ms / 3600000);
-      const m = Math.floor((ms % 3600000) / 60000);
-      return h > 0 ? `${h}h ${m}m` : `${m}m`;
-    }
-    function updateMarketClock() {
-      const now = new Date();
-      const et  = toET(now);
-      const day = et.getDay();
-      const min = et.getHours() * 60 + et.getMinutes();
-      const OPEN = 9*60+30, CLOSE = 16*60;
-      let badge, sub;
-      if (day === 0 || day === 6) {
-        badge = '<span class="market-badge closed">● CLOSED</span>';
-        const daysToMon = day === 6 ? 2 : 1;
-        const msToOpen = (daysToMon * 1440 + OPEN - min) * 60000;
-        sub = `<span class="sub" style="color:#94a3b8">Opens in ${fmtCountdown(msToOpen)}</span>`;
-      } else if (min < OPEN) {
-        badge = '<span class="market-badge pre">◐ PRE-MARKET</span>';
-        sub = `<span class="sub" style="color:#94a3b8">Opens in ${fmtCountdown((OPEN-min)*60000)}</span>`;
-      } else if (min < CLOSE) {
-        badge = '<span class="market-badge open">● OPEN</span>';
-        sub = `<span class="sub" style="color:#94a3b8">Closes in ${fmtCountdown((CLOSE-min)*60000)}</span>`;
-      } else {
-        badge = '<span class="market-badge closed">● AFTER-HOURS</span>';
-        const msToOpen = (OPEN + 1440 - min) * 60000;
-        sub = `<span class="sub" style="color:#94a3b8">Opens in ${fmtCountdown(msToOpen)}</span>`;
-      }
-      document.getElementById("market-clock").innerHTML = badge + sub;
-    }
-    setInterval(updateMarketClock, 30000);
-    updateMarketClock();
+// ── Market clock ────────────────────────────────────────────
+const BASELINE = 100000;
+function isDST(d){const j=new Date(d.getFullYear(),0,1),l=new Date(d.getFullYear(),6,1);return d.getTimezoneOffset()<Math.max(j.getTimezoneOffset(),l.getTimezoneOffset());}
+function toET(d){const o=isDST(d)?-4:-5;return new Date(d.getTime()+(d.getTimezoneOffset()+o*60)*60000);}
+function fmtCd(ms){if(ms<=0)return'0m';const h=Math.floor(ms/3600000),m=Math.floor((ms%3600000)/60000);return h>0?`${h}h ${m}m`:`${m}m`;}
+function updateClock(){
+  const now=new Date(),et=toET(now),d=et.getDay(),min=et.getHours()*60+et.getMinutes(),O=570,C=960;
+  let badge,sub,dotCls;
+  if(d===0||d===6){badge='WEEKEND';dotCls='chip-gray';sub=`Opens in ${fmtCd(((d===6?2:1)*1440+O-min)*60000)}`;}
+  else if(min<O){badge='PRE-MARKET';dotCls='chip-yellow';sub=`Opens in ${fmtCd((O-min)*60000)}`;}
+  else if(min<C){badge='OPEN';dotCls='chip-green';sub=`Closes in ${fmtCd((C-min)*60000)}`;}
+  else{badge='AFTER-HOURS';dotCls='chip-gray';sub=`Opens in ${fmtCd((O+1440-min)*60000)}`;}
+  $('market-clock').innerHTML=`<span class="chip ${dotCls}">● ${badge}</span> <span class="muted" style="font-size:11px">${sub}</span>`;
+}
+setInterval(updateClock,30000); updateClock();
 
-    function updateHeaderPnl(equity) {
-      if (!equity) return;
-      const pnl  = equity - BASELINE_CAPITAL;
-      const pct  = pnl / BASELINE_CAPITAL * 100;
-      const sign = pnl >= 0 ? "+" : "";
-      const col  = pnl >= 0 ? "#0f766e" : "#b91c1c";
-      document.getElementById("header-pnl").innerHTML =
-        `<span style="font-size:20px;font-weight:750;color:${col}">${sign}${fmtMoney(pnl)}</span>` +
-        `<span class="sub" style="color:${col}">${sign}${pct.toFixed(2)}% vs $100k</span>`;
-    }
+function updateHeaderPnl(equity){
+  if(!equity)return;
+  const pnl=equity-BASELINE,pct=pnl/BASELINE*100,sign=pnl>=0?'+':'',col=pnl>=0?'var(--good)':'var(--bad)';
+  $('header-pnl').innerHTML=`<span style="color:${col};font-weight:800">${sign}${fmtMoney(pnl)} <span style="font-size:12px">(${sign}${pct.toFixed(2)}%)</span></span>`;
+}
 
-    // ── Live Positions ──────────────────────────────────────────────────
-    async function loadLivePositions() {
-      try {
-        const resp = await fetch("/portfolio/live-positions?environment=paper", { cache: "no-store" });
-        const data = await resp.json();
-        if (!data.length) {
-          document.getElementById("live-positions").innerHTML =
-            '<span class="muted">No open positions</span>';
-          return;
-        }
-        const html = data.map(p => {
-          const pnlColor = p.unrealized_pnl >= 0 ? "good" : "bad";
-          const pnlSign  = p.unrealized_pnl >= 0 ? "+" : "";
-          const prog     = p.progress_pct != null ? p.progress_pct : null;
-          const fillCol  = prog != null
-            ? (prog > 66 ? "#0f766e" : prog > 33 ? "#b45309" : "#b91c1c")
-            : "#94a3b8";
-          const distTp = p.dist_to_tp_pct != null
-            ? `<span style="color:#0f766e">TP ${p.dist_to_tp_pct.toFixed(2)}%</span>` : "-";
-          const distSl = p.dist_to_sl_pct != null
-            ? `<span style="color:#b91c1c">SL ${p.dist_to_sl_pct.toFixed(2)}%</span>` : "-";
-          const progressBar = prog != null ? `
-            <div class="progress-track" title="${prog.toFixed(0)}% to TP">
-              <div class="progress-fill" style="width:${prog}%;background:${fillCol}"></div>
-            </div>
-            <div style="display:flex;justify-content:space-between;font-size:10px;margin-top:2px">
-              <span style="color:#b91c1c">SL ${fmtMoney(p.stop_loss_price)}</span>
-              <span style="color:#667085">${prog.toFixed(0)}%</span>
-              <span style="color:#0f766e">TP ${fmtMoney(p.take_profit_price)}</span>
-            </div>` : "";
-          return `<div style="border:1px solid #edf0f5;border-radius:8px;padding:12px;margin-bottom:8px">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start">
-              <div>
-                <span style="font-size:16px;font-weight:750">${p.symbol}</span>
-                <span class="label" style="margin-left:8px">${fmtNum(p.quantity)} shares</span>
-              </div>
-              <div style="text-align:right">
-                <div style="font-size:16px;font-weight:750;color:var(--${pnlColor})">
-                  ${pnlSign}${fmtMoney(p.unrealized_pnl)}
-                  <span style="font-size:12px">(${pnlSign}${p.pnl_pct.toFixed(2)}%)</span>
-                </div>
-                <div class="label">${distSl} &nbsp;·&nbsp; ${distTp}</div>
-              </div>
-            </div>
-            <div style="display:flex;gap:16px;margin-top:6px" class="label">
-              <span>Entry ${fmtMoney(p.avg_entry_price)}</span>
-              <span>Now ${fmtMoney(p.current_price)}</span>
-              <span>Value ${fmtMoney(p.market_value)}</span>
-            </div>
-            ${progressBar}
-          </div>`;
-        }).join("");
-        document.getElementById("live-positions").innerHTML = html;
-      } catch (e) {
-        document.getElementById("live-positions").innerHTML =
-          `<span class="error">${e.message}</span>`;
-      }
-    }
+// ── Main refresh ────────────────────────────────────────────
+async function refresh(){
+  const resp=await fetch('/dashboard/data',{cache:'no-store'});
+  const data=await resp.json();
+  const caps=unwrap(data.capabilities)||{};
+  const kill=unwrap(data.kill_switch)||{};
+  const ai=unwrap(data.ai)||{};
+  const acct=unwrap(data.broker_account);
+  const snap=unwrap(data.portfolio_snapshot);
+  const hist=unwrap(data.portfolio_history);
+  const racPos=unwrap(data.portfolio_positions);
+  const brkPos=unwrap(data.broker_positions);
+  const cons=unwrap(data.portfolio_consistency);
+  const sigs=unwrap(data.signals);
+  const ords=unwrap(data.orders);
 
-    // ── NAV Chart ──────────────────────────────────────────────────────
-    let _navPoints = [];
-    let _navRange  = 0;
+  const ts=new Date().toLocaleTimeString();
+  $('last-refresh').textContent=`Updated ${ts}`;
+  $('sb-refresh').textContent=ts;
 
-    async function loadNavHistory() {
-      const limit = _navRange === 0 ? 1000 : _navRange <= 7 ? 300 : 700;
-      try {
-        const resp = await fetch(
-          `/portfolio/history?environment=paper&limit=${limit}`,
-          { cache: "no-store" }
-        );
-        _navPoints = await resp.json();
-      } catch (_) { _navPoints = []; }
-      drawNavChart();
-    }
+  // Sidebar status
+  $('sb-worker-dot').style.background='var(--good)';
+  $('sb-worker-status').textContent=`Worker · ${caps.trading_mode||'-'}`;
+  const ksActive=kill.active;
+  $('sb-ks-dot').style.background=ksActive?'var(--bad)':'var(--good)';
+  $('sb-ks-status').textContent=ksActive?'Kill Switch ACTIVE':'Kill Switch off';
 
-    function setNavRange(days) {
-      _navRange = days;
-      document.querySelectorAll("[id^='nav-']").forEach(b => {
-        b.style.fontWeight = "";
-        b.style.background = "";
-      });
-      const key = days === 7 ? "7d" : days === 30 ? "30d" : "all";
-      const btn = document.getElementById("nav-" + key);
-      if (btn) { btn.style.fontWeight = "700"; btn.style.background = "#dbeafe"; }
-      loadNavHistory();
-    }
+  // Topbar
+  if(acct) updateHeaderPnl(acct.equity);
 
-    function drawNavChart() {
-      let points = _navPoints;
-      if (_navRange > 0) {
-        const cutoff = Date.now() - _navRange * 86400000;
-        points = _navPoints.filter(p => new Date(p.time).getTime() >= cutoff);
-      }
+  // Kill switch
+  $('kill').innerHTML=`<span style="color:${ksActive?'var(--bad)':'var(--good)'}">${ksActive?'● ACTIVE':'● inactive'}</span>`;
+  $('kill-reason').textContent=kill.reason||'';
 
-      const canvas = document.getElementById("nav-chart");
-      if (!canvas) return;
-      const rect  = canvas.getBoundingClientRect();
-      const scale = window.devicePixelRatio || 1;
-      canvas.width  = Math.max(400, Math.floor(rect.width  * scale));
-      canvas.height = Math.max(220, Math.floor(rect.height * scale));
-      const ctx = canvas.getContext("2d");
-      ctx.scale(scale, scale);
-      const W = canvas.width / scale;
-      const H = canvas.height / scale;
-      ctx.clearRect(0, 0, W, H);
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, W, H);
+  // Overview KPIs
+  if(snap){
+    const nav=Number(snap.nav),pnl=Number(snap.pnl_daily),dd=Math.max(0,Number(snap.drawdown)||0);
+    const pnlCol=pnl>=0?'var(--good)':'var(--bad)',ddCol=dd<2?'var(--good)':dd<4?'var(--warn)':'var(--bad)';
+    $('kpi-nav').textContent=fmtMoney(nav);
+    $('kpi-nav-sub').innerHTML=`<span class="muted">cash ${fmtMoney(snap.cash)}</span>`;
+    $('kpi-pnl').innerHTML=`<span style="color:${pnlCol}">${pnl>=0?'+':''}${fmtMoney(pnl)}</span>`;
+    $('kpi-dd').innerHTML=`<span style="color:${ddCol}">${dd.toFixed(2)}%</span>`;
+    $('kpi-dd-bar').innerHTML=`<div class="progress-track"><div class="progress-fill" style="width:${Math.min(dd/5*100,100)}%;background:${ddCol}"></div></div>`;
+  }
+  if(acct){
+    const eq=Number(acct.equity),pnl=eq-BASELINE,col=pnl>=0?'var(--good)':'var(--bad)';
+    $('kpi-equity').textContent=fmtMoney(eq);
+    $('kpi-equity-sub').innerHTML=`<span style="color:${col}">${pnl>=0?'+':''}${fmtMoney(pnl)} vs $100k</span>`;
+    $('equity').textContent=fmtMoney(eq);
+    $('cash').textContent=`cash ${fmtMoney(acct.cash)} · buying power ${fmtMoney(acct.buying_power)}`;
+  }
+  $('mode').textContent=caps.trading_mode||'-';
+  $('broker').textContent=`${caps.broker_configured||'-'} / ${caps.broker_status||'-'}`;
+  $('ai').innerHTML=`<span style="color:${ai.status==='available'?'var(--good)':'var(--muted)'}">${ai.status||'unavailable'}</span>`;
+  $('ai-models').textContent=(ai.models||[]).join(', ')||'—';
 
-      const navVals = points.map(p => Number(p.nav)).filter(Number.isFinite);
-      if (navVals.length < 2) {
-        ctx.fillStyle = "#667085";
-        ctx.font = "13px system-ui";
-        ctx.fillText("No NAV history yet — data arrives each worker cycle", 16, 28);
-        return;
-      }
+  // Signals & Orders
+  $('signals').innerHTML=rows(sigs,[
+    {label:'Time',render:x=>new Date(x.time).toLocaleTimeString()},
+    {label:'Symbol',key:'symbol'},
+    {label:'Dir',render:x=>{const c=x.direction==='buy'?'good':x.direction==='sell'?'bad':'muted';return`<span class="${c}" style="font-weight:700">${x.direction.toUpperCase()}</span>`;}},
+    {label:'Conf',render:x=>{const v=Number(x.confidence),c=v>=0.7?'good':v>=0.5?'warn':'muted';return`<span class="${c}">${v.toFixed(3)}</span>`;}},
+    {label:'Strategy',render:x=>x.strategy_id.replace('_v1','')},
+  ]);
+  $('orders').innerHTML=rows(ords,[
+    {label:'Time',render:x=>new Date(x.created_at).toLocaleTimeString()},
+    {label:'Symbol',key:'symbol'},
+    {label:'Side',render:x=>`<span class="${x.side==='buy'?'good':'bad'}" style="font-weight:700">${x.side.toUpperCase()}</span>`},
+    {label:'Status',render:x=>{const c=x.status==='filled'?'good':x.status==='submitted'?'warn':'muted';return`<span class="${c}">${x.status}</span>`;}},
+    {label:'Price',render:x=>fmtMoney(x.filled_price||x.estimated_price)},
+  ]);
 
-      const PL = 72, PR = 12, PT = 20, PB = 36;
-      const chartW = W - PL - PR;
-      const chartH = H - PT - PB;
-      const minV = Math.min(...navVals);
-      const maxV = Math.max(...navVals);
-      const rangeV = maxV === minV ? 1 : maxV - minV;
+  // Portfolio positions
+  $('portfolio-positions').innerHTML=rows(racPos,[
+    {label:'Symbol',key:'symbol'},
+    {label:'Qty',render:x=>fmtNum(x.quantity)},
+    {label:'Avg',render:x=>fmtMoney(x.average_price)},
+    {label:'Value',render:x=>fmtMoney(x.market_value)},
+  ]);
+  $('broker-positions').innerHTML=rows(brkPos,[
+    {label:'Symbol',key:'symbol'},
+    {label:'Qty',render:x=>fmtNum(x.quantity)},
+    {label:'Value',render:x=>fmtMoney(x.market_value)},
+  ]);
 
-      // Y grid + labels
-      const ySteps = 4;
-      ctx.font = "10px system-ui";
-      ctx.textAlign = "right";
-      for (let i = 0; i <= ySteps; i++) {
-        const val = minV + (rangeV / ySteps) * i;
-        const y   = PT + chartH - (i / ySteps) * chartH;
-        ctx.strokeStyle = "#edf0f5";
-        ctx.lineWidth   = 1;
-        ctx.beginPath(); ctx.moveTo(PL, y); ctx.lineTo(PL + chartW, y); ctx.stroke();
-        ctx.fillStyle = "#94a3b8";
-        ctx.fillText(fmtMoney(val), PL - 4, y + 3);
-      }
+  // Consistency
+  if(cons) renderConsistency(cons);
 
-      // X labels (up to 6 evenly spaced)
-      const xCount = Math.min(6, points.length - 1);
-      ctx.textAlign = "center";
-      for (let i = 0; i <= xCount; i++) {
-        const idx  = Math.round(i * (points.length - 1) / xCount);
-        const x    = PL + (idx / (points.length - 1)) * chartW;
-        const d    = new Date(points[idx].time);
-        const hh   = String(d.getHours()).padStart(2,"0");
-        const mm   = String(d.getMinutes()).padStart(2,"0");
-        const lbl  = `${d.getMonth()+1}/${d.getDate()} ${hh}:${mm}`;
-        ctx.fillStyle = "#94a3b8";
-        ctx.fillText(lbl, x, H - PB + 14);
-      }
+  // Charts
+  drawNavChart(hist||[]);
 
-      // Line + fill
-      const positive = navVals[navVals.length - 1] >= navVals[0];
-      const lineColor = positive ? "#0f766e" : "#b91c1c";
-      const fillColor = positive ? "rgba(15,118,110,0.08)" : "rgba(185,28,28,0.06)";
+  // Section-specific
+  loadLivePositions();
+  if(currentSection==='portfolio') { loadFills(); loadTradeOutcomes(); }
+  if(currentSection==='trading')   { loadStrategyPerformance(); }
+  if(currentSection==='ml')        { loadMlStats(); }
+  if(currentSection==='system')    { loadAuditTrail(); loadWorkerConfig(); }
+  if(currentSection==='backtest')  { loadBacktests(); }
+}
 
-      ctx.beginPath();
-      navVals.forEach((v, i) => {
-        const x = PL + (i / (navVals.length - 1)) * chartW;
-        const y = PT + chartH - ((v - minV) / rangeV) * chartH;
-        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-      });
-      ctx.strokeStyle = lineColor;
-      ctx.lineWidth   = 2;
-      ctx.stroke();
+// ── Live Positions ──────────────────────────────────────────
+async function loadLivePositions(){
+  try{
+    const r=await fetch('/portfolio/live-positions?environment=paper',{cache:'no-store'});
+    const data=await r.json();
+    $('pos-count').textContent=data.length?`${data.length} open`:'no positions';
+    if(!data.length){$('live-positions').innerHTML='<span class="muted">No open positions</span>';return;}
+    $('live-positions').innerHTML='<div style="display:flex;flex-direction:column;gap:10px">'+data.map(p=>{
+      const pnlCol=p.unrealized_pnl>=0?'var(--good)':'var(--bad)',s=p.unrealized_pnl>=0?'+':'';
+      const prog=p.progress_pct!=null?p.progress_pct:null;
+      const fc=prog!=null?(prog>66?'var(--good)':prog>33?'var(--warn)':'var(--bad)'):'var(--muted)';
+      return`<div class="pos-card">
+        <div class="pos-row">
+          <div><span style="font-size:16px;font-weight:800">${p.symbol}</span> <span class="muted" style="font-size:12px">${fmtNum(p.quantity)} sh</span></div>
+          <div style="text-align:right"><div style="font-size:16px;font-weight:800;color:${pnlCol}">${s}${fmtMoney(p.unrealized_pnl)} <span style="font-size:11px">(${s}${p.pnl_pct.toFixed(2)}%)</span></div>
+          <div class="muted" style="font-size:11px"><span style="color:var(--bad)">SL ${(p.dist_to_sl_pct||0).toFixed(2)}%</span> · <span style="color:var(--good)">TP ${(p.dist_to_tp_pct||0).toFixed(2)}%</span></div></div>
+        </div>
+        <div class="muted" style="font-size:11px;margin-top:6px;display:flex;gap:16px">
+          <span>Entry ${fmtMoney(p.avg_entry_price)}</span><span>Now ${fmtMoney(p.current_price)}</span><span>Value ${fmtMoney(p.market_value)}</span>
+        </div>
+        ${prog!=null?`<div class="progress-track" style="margin-top:8px"><div class="progress-fill" style="width:${prog}%;background:${fc}"></div></div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:2px"><span style="color:var(--bad)">SL ${fmtMoney(p.stop_loss_price)}</span><span>${prog.toFixed(0)}% to TP</span><span style="color:var(--good)">TP ${fmtMoney(p.take_profit_price)}</span></div>`:''}
+      </div>`;
+    }).join('')+'</div>';
+  }catch(e){$('live-positions').innerHTML=`<span class="error">${e.message}</span>`;}
+}
 
-      // Area fill under line
-      ctx.lineTo(PL + chartW, PT + chartH);
-      ctx.lineTo(PL, PT + chartH);
-      ctx.closePath();
-      ctx.fillStyle = fillColor;
-      ctx.fill();
+// ── NAV Chart ───────────────────────────────────────────────
+let _navPts=[],_navRange=0;
+async function loadNavHistory(){
+  const lim=_navRange===0?1000:_navRange<=7?300:700;
+  try{const r=await fetch(`/portfolio/history?environment=paper&limit=${lim}`,{cache:'no-store'});_navPts=await r.json();}catch(_){_navPts=[];}
+  drawNavChart(_navPts);
+}
+function setNavRange(d){
+  _navRange=d;
+  ['7d','30d','all'].forEach(k=>{ const b=$('nav-'+k); if(b){b.style.fontWeight='';b.style.background='';} });
+  const k=d===7?'7d':d===30?'30d':'all'; const b=$('nav-'+k);
+  if(b){b.style.fontWeight='800';b.style.background='#eff6ff';}
+  loadNavHistory();
+}
+function drawNavChart(all){
+  _navPts=all||[];
+  let pts=_navPts;
+  if(_navRange>0){const c=Date.now()-_navRange*86400000;pts=_navPts.filter(p=>new Date(p.time).getTime()>=c);}
+  const cv=$('nav-chart'); if(!cv)return;
+  const rc=cv.getBoundingClientRect(),sc=window.devicePixelRatio||1;
+  cv.width=Math.max(400,Math.floor(rc.width*sc)); cv.height=Math.max(220,Math.floor(220*sc));
+  const ctx=cv.getContext('2d'); ctx.scale(sc,sc);
+  const W=cv.width/sc,H=cv.height/sc;
+  ctx.clearRect(0,0,W,H); ctx.fillStyle='#fff'; ctx.fillRect(0,0,W,H);
+  const navV=pts.map(p=>Number(p.nav)).filter(Number.isFinite);
+  if(navV.length<2){ctx.fillStyle='#94a3b8';ctx.font='13px system-ui';ctx.fillText('No NAV history yet',16,28);return;}
+  const PL=72,PR=12,PT=24,PB=36,CW=W-PL-PR,CH=H-PT-PB;
+  const mn=Math.min(...navV),mx=Math.max(...navV),rn=mx===mn?1:mx-mn;
+  ctx.font='10px system-ui'; ctx.textAlign='right'; ctx.fillStyle='#94a3b8';
+  for(let i=0;i<=4;i++){
+    const v=mn+(rn/4)*i,y=PT+CH-(i/4)*CH;
+    ctx.strokeStyle='#f1f5f9'; ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(PL,y);ctx.lineTo(PL+CW,y);ctx.stroke();
+    ctx.fillText(fmtMoney(v),PL-4,y+3);
+  }
+  const xn=Math.min(6,pts.length-1);
+  ctx.textAlign='center';
+  for(let i=0;i<=xn;i++){
+    const idx=Math.round(i*(pts.length-1)/xn),x=PL+(idx/(pts.length-1))*CW;
+    const dt=new Date(pts[idx].time);
+    const hh=String(dt.getHours()).padStart(2,'0'),mm=String(dt.getMinutes()).padStart(2,'0');
+    ctx.fillText(`${dt.getMonth()+1}/${dt.getDate()} ${hh}:${mm}`,x,H-PB+14);
+  }
+  const pos=navV[navV.length-1]>=navV[0];
+  const lc=pos?'#10b981':'#ef4444',fc=pos?'rgba(16,185,129,0.08)':'rgba(239,68,68,0.06)';
+  ctx.beginPath();
+  navV.forEach((v,i)=>{const x=PL+(i/(navV.length-1))*CW,y=PT+CH-((v-mn)/rn)*CH;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});
+  ctx.strokeStyle=lc; ctx.lineWidth=2; ctx.stroke();
+  ctx.lineTo(PL+CW,PT+CH); ctx.lineTo(PL,PT+CH); ctx.closePath(); ctx.fillStyle=fc; ctx.fill();
+  ctx.fillStyle='#0f172a'; ctx.font='bold 13px system-ui'; ctx.textAlign='left';
+  ctx.fillText(fmtMoney(navV[navV.length-1]),PL+4,PT+16);
+  // Tooltip
+  cv._pts=pts; cv._meta={PL,PR,PT,PB,CW,CH,mn,rn};
+}
+(()=>{
+  const cv=$('nav-chart'); if(!cv)return;
+  const tt=document.createElement('div');
+  tt.style.cssText='position:fixed;background:#0f172a;color:#f1f5f9;padding:6px 10px;border-radius:6px;font-size:12px;pointer-events:none;display:none;z-index:99';
+  document.body.appendChild(tt);
+  cv.addEventListener('mousemove',e=>{
+    const pts=cv._pts,m=cv._meta;
+    if(!pts||pts.length<2||!m)return;
+    const rc=cv.getBoundingClientRect(),mx=e.clientX-rc.left;
+    if(mx<m.PL||mx>m.PL+m.CW){tt.style.display='none';return;}
+    const idx=Math.round((mx-m.PL)/m.CW*(pts.length-1));
+    const pt=pts[Math.max(0,Math.min(idx,pts.length-1))];
+    const dt=new Date(pt.time);
+    tt.innerHTML=`<b>${fmtMoney(pt.nav)}</b><br>${dt.toLocaleDateString()} ${dt.toLocaleTimeString()}`;
+    tt.style.display='block'; tt.style.left=(e.clientX+12)+'px'; tt.style.top=(e.clientY-8)+'px';
+  });
+  cv.addEventListener('mouseleave',()=>{tt.style.display='none';});
+})();
 
-      // Current NAV label top-left
-      ctx.fillStyle = "#263241";
-      ctx.font      = "bold 13px system-ui";
-      ctx.textAlign = "left";
-      ctx.fillText(fmtMoney(navVals[navVals.length - 1]), PL + 4, PT + 14);
+// ── Fills ────────────────────────────────────────────────────
+async function loadFills(){
+  const cols=[
+    {label:'Time',render:x=>new Date(x.created_at).toLocaleTimeString()},
+    {label:'Symbol',key:'symbol'},
+    {label:'Side',render:x=>`<span class="${x.side==='buy'?'good':'bad'}" style="font-weight:700">${x.side.toUpperCase()}</span>`},
+    {label:'Qty',render:x=>fmtNum(x.quantity)},
+    {label:'Price',render:x=>fmtMoney(x.price)},
+    {label:'Notional',render:x=>fmtMoney(x.notional)},
+  ];
+  try{
+    const [r1,r2]=await Promise.all([
+      fetch('/portfolio/fills?environment=paper&days=1',{cache:'no-store'}),
+      fetch('/portfolio/fills?environment=paper&days=7',{cache:'no-store'}),
+    ]);
+    $('fills-today').innerHTML=rows(await r1.json(),cols);
+    $('fills-week').innerHTML=rows(await r2.json(),cols);
+  }catch(e){$('fills-today').innerHTML=`<span class="error card-body">${e.message}</span>`;}
+}
 
-      // Hover tooltip
-      canvas._navPoints = points;
-      canvas._navMeta   = { PL, PR, PT, PB, chartW, chartH, minV, rangeV };
-    }
+// ── Trade Outcomes ──────────────────────────────────────────
+async function loadTradeOutcomes(){
+  try{
+    const [r1,r2]=await Promise.all([
+      fetch('/trade-outcomes?environment=paper&limit=15',{cache:'no-store'}),
+      fetch('/trade-outcomes/summary?environment=paper',{cache:'no-store'}),
+    ]);
+    const outs=await r1.json(),sum=await r2.json();
+    $('trade-outcomes').innerHTML=rows(outs,[
+      {label:'Closed',render:x=>new Date(x.closed_at).toLocaleTimeString()},
+      {label:'Symbol',key:'symbol'},
+      {label:'Strategy',render:x=>x.strategy_id.replace('_v1','')},
+      {label:'Reason',key:'close_reason'},
+      {label:'Entry',render:x=>fmtMoney(x.open_price)},
+      {label:'Exit',render:x=>fmtMoney(x.close_price)},
+      {label:'P&L',render:x=>{const n=Number(x.realized_pnl),p=Number(x.pnl_pct),c=n>=0?'good':'bad';return`<span class="${c}">${fmtMoney(n)} (${p>=0?'+':''}${p.toFixed(2)}%)</span>`;}},
+      {label:'Dur',render:x=>{const s=Number(x.duration_seconds);return s<3600?`${Math.round(s/60)}m`:`${(s/3600).toFixed(1)}h`;}},
+    ]);
+    $('strategy-summary').innerHTML=rows(sum,[
+      {label:'Strategy',render:x=>x.strategy_id.replace('_v1','')},
+      {label:'W/L',render:x=>`${x.wins}/${x.losses}`},
+      {label:'P&L',render:x=>{const n=Number(x.total_pnl),c=n>=0?'good':'bad';return`<span class="${c}">${fmtMoney(n)}</span>`;}},
+      {label:'Avg %',render:x=>{const p=Number(x.avg_pnl_pct),c=p>=0?'good':'bad';return`<span class="${c}">${p>=0?'+':''}${p.toFixed(2)}%</span>`;}},
+    ]);
+  }catch(e){$('trade-outcomes').innerHTML=`<span class="error">${e.message}</span>`;}
+}
 
-    // Tooltip on hover
-    (function setupNavTooltip() {
-      const canvas  = document.getElementById("nav-chart");
-      const tooltip = document.createElement("div");
-      tooltip.style.cssText =
-        "position:fixed;background:#1e293b;color:#f1f5f9;padding:6px 10px;" +
-        "border-radius:6px;font-size:12px;pointer-events:none;display:none;z-index:99";
-      document.body.appendChild(tooltip);
+// ── Strategy Performance ─────────────────────────────────────
+async function loadStrategyPerformance(){
+  try{
+    const r=await fetch('/strategies/performance?environment=paper',{cache:'no-store'});
+    const data=await r.json();
+    $('strategy-performance').innerHTML=rows(data,[
+      {label:'Strategy',key:'strategy_id'},
+      {label:'Buys',key:'buys'},{label:'Sells',key:'sells'},
+      {label:'Bought',render:x=>fmtMoney(x.buy_notional)},
+      {label:'Sold',render:x=>fmtMoney(x.sell_notional)},
+      {label:'Realized P&L',render:x=>{const n=Number(x.realized_pnl),c=n>=0?'good':'bad';return`<span class="${c}">${fmtMoney(n)}</span>`;}},
+    ]);
+  }catch(e){$('strategy-performance').innerHTML=`<span class="error">${e.message}</span>`;}
+}
 
-      canvas.addEventListener("mousemove", e => {
-        const pts = canvas._navPoints;
-        const m   = canvas._navMeta;
-        if (!pts || pts.length < 2 || !m) return;
-        const rect = canvas.getBoundingClientRect();
-        const mx   = e.clientX - rect.left;
-        if (mx < m.PL || mx > m.PL + m.chartW) { tooltip.style.display = "none"; return; }
-        const frac = (mx - m.PL) / m.chartW;
-        const idx  = Math.round(frac * (pts.length - 1));
-        const pt   = pts[Math.max(0, Math.min(idx, pts.length - 1))];
-        const d    = new Date(pt.time);
-        tooltip.innerHTML =
-          `<b>${fmtMoney(pt.nav)}</b><br>` +
-          `${d.toLocaleDateString()} ${d.toLocaleTimeString()}`;
-        tooltip.style.display = "block";
-        tooltip.style.left    = (e.clientX + 14) + "px";
-        tooltip.style.top     = (e.clientY - 10) + "px";
-      });
-      canvas.addEventListener("mouseleave", () => { tooltip.style.display = "none"; });
-    })();
-    async function loadFills() {
-      const cols = [
-        { label: "Time",     render: x => new Date(x.created_at).toLocaleTimeString() },
-        { label: "Symbol",   key: "symbol" },
-        { label: "Side",     render: x => {
-          const c = x.side === "buy" ? "good" : "bad";
-          return `<span style="color:var(--${c})">${x.side.toUpperCase()}</span>`;
-        }},
-        { label: "Qty",      render: x => fmtNum(x.quantity) },
-        { label: "Price",    render: x => fmtMoney(x.price) },
-        { label: "Notional", render: x => fmtMoney(x.notional) },
-      ];
-      try {
-        const [r1, r2] = await Promise.all([
-          fetch("/portfolio/fills?environment=paper&days=1", { cache: "no-store" }),
-          fetch("/portfolio/fills?environment=paper&days=7", { cache: "no-store" }),
-        ]);
-        const today = await r1.json();
-        const week  = await r2.json();
-        document.getElementById("fills-today").innerHTML =
-          today.length ? rows(today, cols) : '<span class="muted">No fills today</span>';
-        document.getElementById("fills-week").innerHTML =
-          week.length ? rows(week, cols) : '<span class="muted">No fills this week</span>';
-      } catch (e) {
-        document.getElementById("fills-today").innerHTML = `<span class="error">${e.message}</span>`;
-      }
-    }
-    async function activateKillSwitch() {
-      const reason = prompt("Reason");
-      if (!reason) return;
-      await fetch("/admin/kill-switch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason, actor: "dashboard" })
-      });
-      refresh();
-    }
-    async function resetKillSwitch() {
-      const reason = prompt("Reason");
-      if (!reason) return;
-      await fetch("/admin/kill-switch/reset", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason, actor: "dashboard" })
-      });
-      refresh();
-    }
-    document.getElementById("pipeline-start").value = isoDate(45);
-    document.getElementById("pipeline-end").value = isoDate(1);
-    setNavRange(0); // inicializa con "All" activo
+// ── ML ───────────────────────────────────────────────────────
+let _mlImportance={};
+async function loadMlStats(){
+  try{
+    const r=await fetch('/ml/stats',{cache:'no-store'});
+    const d=await r.json();
+    const total=Number(d.total)||0;
+    $('ml-stats').innerHTML=`
+      <div class="kpi-row" style="grid-template-columns:repeat(3,1fr);margin-bottom:12px">
+        <div class="kpi" style="padding:12px"><div class="kpi-label">Total Labeled</div><div class="kpi-value" style="font-size:18px">${total.toLocaleString()}</div></div>
+        <div class="kpi" style="padding:12px"><div class="kpi-label">Win Rate</div><div class="kpi-value" style="font-size:18px;color:var(--good)">${d.win_rate_pct||0}%</div></div>
+        <div class="kpi" style="padding:12px"><div class="kpi-label">Avg P&L</div><div class="kpi-value" style="font-size:18px;color:${Number(d.avg_pnl_pct)>=0?'var(--good)':'var(--bad)'}">${Number(d.avg_pnl_pct||0).toFixed(2)}%</div></div>
+      </div>
+      <div style="font-size:12px;color:var(--muted)">
+        Wins: ${Number(d.wins||0).toLocaleString()} · Losses: ${Number(d.losses||0).toLocaleString()} · Timeouts: ${Number(d.timeouts||0).toLocaleString()}
+      </div>`;
+    drawWLChart(Number(d.wins||0),Number(d.losses||0),Number(d.timeouts||0));
+    if(_mlImportance&&Object.keys(_mlImportance).length>0) drawFIChart(_mlImportance);
+  }catch(e){$('ml-stats').innerHTML=`<span class="error">${e.message}</span>`;}
+}
+async function runLabel(){
+  $('ml-stats').innerHTML='<span class="muted">Labeling signals…</span>';
+  try{const r=await fetch('/ml/label?tp_pct=3.0&sl_pct=1.0&batch_size=2000',{method:'POST'});const d=await r.json();await loadMlStats();console.log('label result',d);}
+  catch(e){$('ml-stats').innerHTML=`<span class="error">${e.message}</span>`;}
+}
+async function runTrain(){
+  $('ml-train-result').innerHTML='<span class="muted">Training… this may take a moment.</span>';
+  try{
+    const r=await fetch('/ml/train?n_estimators=100',{method:'POST'});
+    const d=await r.json();
+    if(d.error){$('ml-train-result').innerHTML=`<span class="error">${d.error}</span>`;return;}
+    _mlImportance=d.feature_importance||{};
+    $('ml-train-result').innerHTML=`
+      <div class="kpi-row" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px">
+        <div class="kpi" style="padding:12px"><div class="kpi-label">Accuracy</div><div class="kpi-value" style="font-size:18px">${(Number(d.accuracy||0)*100).toFixed(1)}%</div></div>
+        <div class="kpi" style="padding:12px"><div class="kpi-label">ROC-AUC</div><div class="kpi-value" style="font-size:18px">${d.cv_roc_auc_mean||0}</div></div>
+        <div class="kpi" style="padding:12px"><div class="kpi-label">Precision Win</div><div class="kpi-value" style="font-size:18px">${(Number(d.precision_win||0)*100).toFixed(1)}%</div></div>
+        <div class="kpi" style="padding:12px"><div class="kpi-label">Samples</div><div class="kpi-value" style="font-size:18px">${(Number(d.samples_train||0)+Number(d.samples_test||0)).toLocaleString()}</div></div>
+      </div>
+      <canvas id="fi-chart" style="height:200px"></canvas>`;
+    drawFIChart(_mlImportance);
+  }catch(e){$('ml-train-result').innerHTML=`<span class="error">${e.message}</span>`;}
+}
+function drawWLChart(wins,losses,timeouts){
+  const cv=$('wl-chart'); if(!cv)return;
+  const sc=window.devicePixelRatio||1,rc=cv.getBoundingClientRect();
+  cv.width=Math.floor(rc.width*sc); cv.height=Math.floor(180*sc);
+  const ctx=cv.getContext('2d'); ctx.scale(sc,sc);
+  const W=cv.width/sc,H=cv.height/sc;
+  ctx.clearRect(0,0,W,H);
+  const total=wins+losses+timeouts; if(!total){ctx.fillStyle='#94a3b8';ctx.font='13px system-ui';ctx.fillText('No data yet',12,28);return;}
+  const cx=W/2,cy=H/2,r=Math.min(cx,cy)-20;
+  const segs=[{v:wins,c:'#10b981',l:'Win'},{v:losses,c:'#ef4444',l:'Loss'},{v:timeouts,c:'#94a3b8',l:'Timeout'}];
+  let start=-Math.PI/2;
+  segs.forEach(s=>{
+    const a=(s.v/total)*Math.PI*2;
+    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,r,start,start+a); ctx.closePath();
+    ctx.fillStyle=s.c; ctx.fill();
+    start+=a;
+  });
+  ctx.beginPath(); ctx.arc(cx,cy,r*0.55,0,Math.PI*2); ctx.fillStyle='#fff'; ctx.fill();
+  ctx.fillStyle='#0f172a'; ctx.font='bold 16px system-ui'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(`${((wins/total)*100).toFixed(0)}%`,cx,cy-8);
+  ctx.font='11px system-ui'; ctx.fillStyle='#94a3b8'; ctx.fillText('win rate',cx,cy+10);
+  // Legend
+  let lx=10,ly=H-14;
+  segs.forEach(s=>{
+    ctx.fillStyle=s.c; ctx.fillRect(lx,ly-8,10,10);
+    ctx.fillStyle='#64748b'; ctx.font='10px system-ui'; ctx.textAlign='left'; ctx.textBaseline='middle';
+    ctx.fillText(`${s.l} ${s.v.toLocaleString()}`,lx+14,ly-3);
+    lx+=ctx.measureText(`${s.l} ${s.v.toLocaleString()}`).width+28;
+  });
+}
+function drawFIChart(importance){
+  const cv=$('fi-chart'); if(!cv)return;
+  const entries=Object.entries(importance).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  if(!entries.length)return;
+  const sc=window.devicePixelRatio||1,rc=cv.getBoundingClientRect();
+  cv.width=Math.floor(rc.width*sc); cv.height=Math.floor(200*sc);
+  const ctx=cv.getContext('2d'); ctx.scale(sc,sc);
+  const W=cv.width/sc,H=cv.height/sc;
+  ctx.clearRect(0,0,W,H);
+  const PL=120,PR=40,PT=10,PB=10,bH=18,gap=4;
+  const maxV=entries[0][1];
+  entries.forEach(([k,v],i)=>{
+    const y=PT+i*(bH+gap),bW=(v/maxV)*(W-PL-PR);
+    ctx.fillStyle='#3b82f6'; ctx.fillRect(PL,y,bW,bH);
+    ctx.fillStyle='#0f172a'; ctx.font='11px system-ui'; ctx.textAlign='right'; ctx.textBaseline='middle';
+    ctx.fillText(k.replace('_',' '),PL-6,y+bH/2);
+    ctx.fillStyle='#64748b'; ctx.textAlign='left';
+    ctx.fillText((v*100).toFixed(1)+'%',PL+bW+6,y+bH/2);
+  });
+}
+
+// ── Audit Trail ──────────────────────────────────────────────
+async function loadAuditTrail(){
+  try{
+    const r=await fetch('/audit/events?environment=paper&limit=20',{cache:'no-store'});
+    $('audit-trail').innerHTML=rows(await r.json(),[
+      {label:'Time',render:x=>new Date(x.created_at).toLocaleTimeString()},
+      {label:'Event',key:'event_type'},
+      {label:'Actor',key:'actor'},
+      {label:'Correlation',render:x=>String(x.correlation_id).slice(0,28)+'…'},
+    ]);
+  }catch(e){$('audit-trail').innerHTML=`<span class="error">${e.message}</span>`;}
+}
+
+// ── Backtests ────────────────────────────────────────────────
+async function loadBacktests(){
+  try{
+    const r=await fetch('/backtest/list?limit=20',{cache:'no-store'});
+    $('backtests').innerHTML=rows(await r.json(),[
+      {label:'Symbol',key:'symbol'},
+      {label:'Strategy',key:'strategy_id'},
+      {label:'Created',render:x=>new Date(x.created_at).toLocaleDateString()},
+    ]);
+  }catch(e){$('backtests').innerHTML=`<span class="error">${e.message}</span>`;}
+}
+
+// ── Worker Config ────────────────────────────────────────────
+let _cfgFocused=false;
+document.addEventListener('DOMContentLoaded',()=>{
+  ['cfg-confidence','cfg-symbols','cfg-timeframe','cfg-maxage'].forEach(id=>{
+    const el=$(id); if(!el)return;
+    el.addEventListener('focus',()=>{_cfgFocused=true;});
+    el.addEventListener('blur', ()=>{_cfgFocused=false;});
+  });
+});
+async function loadWorkerConfig(){
+  if(_cfgFocused)return;
+  try{
+    const r=await fetch('/admin/worker-config',{cache:'no-store'});
+    const data=await r.json();
+    const map=Object.fromEntries(data.map(x=>[x.key,x.value]));
+    if(map.min_signal_confidence) $('cfg-confidence').value=map.min_signal_confidence;
+    if(map.watched_symbols)       $('cfg-symbols').value=map.watched_symbols;
+    if(map.watched_timeframe)     $('cfg-timeframe').value=map.watched_timeframe;
+    if(map.signal_max_age_seconds)$('cfg-maxage').value=map.signal_max_age_seconds;
+  }catch(_){}
+}
+async function saveWorkerConfig(){
+  const vals={min_signal_confidence:$('cfg-confidence').value,watched_symbols:$('cfg-symbols').value,watched_timeframe:$('cfg-timeframe').value,signal_max_age_seconds:$('cfg-maxage').value};
+  try{
+    await Promise.all(Object.entries(vals).map(([k,v])=>fetch(`/admin/worker-config/${k}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({value:v,actor:'dashboard'})})));
+    $('cfg-result').innerHTML='<span class="good">Saved — applies on next worker cycle</span>';
+    setTimeout(()=>{$('cfg-result').innerHTML='';},4000);
+  }catch(e){$('cfg-result').innerHTML=`<span class="error">${e.message}</span>`;}
+}
+
+// ── Portfolio actions ────────────────────────────────────────
+function renderConsistency(d){
+  const c=d.status==='ok'?'good':d.status==='degraded'?'warn':'bad';
+  $('portfolio-consistency').innerHTML=`<span class="${c}" style="font-weight:700">● ${d.status}</span> <span class="muted" style="font-size:11px">order gate ${d.block_order_execution?'BLOCKED':'open'}</span>`+
+    (d.diffs&&d.diffs.length?'<div style="margin-top:8px">'+rows(d.diffs,[{label:'Symbol',key:'symbol'},{label:'Severity',key:'severity'},{label:'RAC Qty',render:x=>fmtNum(x.rac_quantity)},{label:'Broker Qty',render:x=>fmtNum(x.broker_quantity)},{label:'Reasons',render:x=>(x.reasons||[]).join(', ')}])+'</div>':'');
+}
+async function checkConsistency(){
+  $('portfolio-consistency').innerHTML='<span class="muted">Checking…</span>';
+  try{const r=await fetch('/portfolio/consistency?environment=paper',{cache:'no-store'});renderConsistency(await r.json());}
+  catch(e){$('portfolio-consistency').innerHTML=`<span class="error">${e.message}</span>`;}
+}
+async function markToMarket(){
+  $('mark-to-market').innerHTML='<span class="muted">Updating NAV…</span>';
+  try{
+    const r=await fetch('/portfolio/mark-to-market?environment=paper&timeframe=1Day',{method:'POST'});
+    const d=await r.json();
+    $('mark-to-market').innerHTML=`<div style="font-size:14px;font-weight:800">${fmtMoney(d.nav)}</div><div class="muted" style="font-size:11px">cash ${fmtMoney(d.cash)} · positions ${fmtMoney(d.positions_value)}</div>`+
+      rows(d.positions,[{label:'Symbol',key:'symbol'},{label:'Qty',render:x=>fmtNum(x.quantity)},{label:'Last',render:x=>fmtMoney(x.latest_price)},{label:'Unrealized',render:x=>fmtMoney(x.unrealized_pnl)}]);
     refresh();
-    setInterval(refresh, 15000);
-    window.addEventListener("resize", () => { drawNavChart(); });
-  </script>
+  }catch(e){$('mark-to-market').innerHTML=`<span class="error">${e.message}</span>`;}
+}
+async function reconcileOrders(){
+  $('reconciliation').innerHTML='<span class="muted">Reconciling…</span>';
+  try{
+    const r=await fetch('/orders/reconcile',{method:'POST'});const d=await r.json();
+    $('reconciliation').innerHTML=`<span style="font-weight:700">${d.filled} filled</span> <span class="muted">· checked ${d.checked} · pending ${d.pending} · cancelled ${d.cancelled}</span>`;
+    refresh();
+  }catch(e){$('reconciliation').innerHTML=`<span class="error">${e.message}</span>`;}
+}
+async function runPipeline(){
+  $('pipeline-result').innerHTML='<span class="muted">Running…</span>';
+  const payload={symbol:$('pipeline-symbol').value.trim().toUpperCase(),timeframe:$('pipeline-timeframe').value.trim(),strategy_id:$('pipeline-strategy').value,start:`${$('pipeline-start').value}T00:00:00Z`,end:`${$('pipeline-end').value}T23:59:59Z`,feature_set:'technical_v1',limit:300,explain:false};
+  try{
+    const r=await fetch('/pipeline/paper/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const d=await r.json();
+    $('pipeline-result').innerHTML=`<span style="font-weight:700">${d.latest_signal_direction||'no signal'}</span> <span class="muted">· ${d.symbol} ${d.timeframe} · fetched ${d.fetched} · features ${d.features_computed} · signals ${d.signals_generated}</span>`;
+    refresh();
+  }catch(e){$('pipeline-result').innerHTML=`<span class="error">${e.message}</span>`;}
+}
+
+// ── Kill switch ──────────────────────────────────────────────
+async function activateKillSwitch(){
+  const r=prompt('Reason for activating kill switch:');if(!r)return;
+  await fetch('/admin/kill-switch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reason:r,actor:'dashboard'})});
+  refresh();
+}
+async function resetKillSwitch(){
+  const r=prompt('Reason for resetting:');if(!r)return;
+  await fetch('/admin/kill-switch/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reason:r,actor:'dashboard'})});
+  refresh();
+}
+async function doBootstrap(){
+  $('bootstrap-result').innerHTML='<span class="muted">Running…</span>';
+  try{const r=await fetch('/admin/bootstrap',{method:'POST'});const d=await r.json();$('bootstrap-result').innerHTML=`<span class="good">${d.status}</span>`;}
+  catch(e){$('bootstrap-result').innerHTML=`<span class="error">${e.message}</span>`;}
+}
+
+// ── Init ─────────────────────────────────────────────────────
+$('pipeline-start').value=isoDate(45);
+$('pipeline-end').value=isoDate(1);
+setNavRange(0);
+refresh();
+setInterval(refresh,15000);
+window.addEventListener('resize',()=>{drawNavChart(_navPts);});
+</script>
 </body>
 </html>
 """

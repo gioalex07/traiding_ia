@@ -14,6 +14,7 @@ known-first-party = ["rac"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/test_daily_report.py" = ["I001"]
+"rac/dashboard/html.py" = ["E501"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
