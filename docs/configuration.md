@@ -18,7 +18,7 @@ All configuration is via environment variables. Copy `.env.example` to `.env` an
 | `ALPACA_API_KEY` | *(required)* | Alpaca API key (paper or live) |
 | `ALPACA_API_SECRET` | *(required)* | Alpaca API secret |
 | `ALPACA_PAPER_BASE_URL` | `https://paper-api.alpaca.markets` | Paper trading endpoint |
-| `ALPACA_DATA_BASE_URL` | `https://data.alpaca.markets/v2` | Market data endpoint (IEX free tier) |
+| `ALPACA_DATA_BASE_URL` | `https://data.alpaca.markets/v2` | Market data endpoint (IEX free tier — 15 min delay) |
 
 ## Storage
 
@@ -33,9 +33,11 @@ All configuration is via environment variables. Copy `.env.example` to `.env` an
 |---|---|---|
 | `RAC_SYMBOLS` | `AAPL` | Comma-separated list of symbols to trade |
 | `RAC_TIMEFRAME` | `1Min` | Bar timeframe for feature computation |
-| `RAC_STRATEGIES` | `trend_following_v1,mean_reversion_v1` | Ordered list of strategies to run per cycle |
+| `RAC_STRATEGIES` | `trend_following_v1,mean_reversion_v1` | Ordered strategies per cycle |
 | `RAC_LOOP_INTERVAL` | `60` | Seconds between worker cycles |
-| `RAC_MIN_SIGNAL_CONFIDENCE` | `0.6` | Minimum signal confidence to execute (0.0–1.0) |
+| `RAC_MIN_SIGNAL_CONFIDENCE` | `0.6` | Minimum confidence to execute (0.0–1.0) |
+
+> **Live-configurable:** `RAC_SYMBOLS`, `RAC_TIMEFRAME`, `RAC_MIN_SIGNAL_CONFIDENCE`, and signal max age can be changed at runtime via the dashboard (System → Worker Config) or `PUT /admin/worker-config/{key}` — no restart needed.
 
 ## Risk Limits
 
@@ -55,7 +57,13 @@ All configuration is via environment variables. Copy `.env.example` to `.env` an
 | `TELEGRAM_BOT_TOKEN` | *(empty = disabled)* | Bot token from `@BotFather` |
 | `TELEGRAM_CHAT_ID` | *(empty = disabled)* | Your chat ID from `@userinfobot` |
 
-When both are set, alerts fire for: order fills, kill switch state changes, drawdown breaches, and daily EOD summary (after 21:00 UTC).
+When both are set, alerts fire for: order fills, kill switch state changes, drawdown breaches, daily EOD summary, and ML model retrain results.
+
+Test connectivity:
+```bash
+set -a && source .env && set +a
+python scripts/test_telegram.py
+```
 
 ## Observability
 
@@ -69,8 +77,26 @@ When both are set, alerts fire for: order fills, kill switch state changes, draw
 
 | Profile | Services started |
 |---|---|
-| `dev` | api, worker, scheduler, postgres, redis, redpanda, prometheus, grafana, loki |
+| `dev` | api, worker, scheduler, postgres, redis, redpanda, prometheus, grafana, loki, mlflow |
 | `paper` | Same as dev |
 | `backtest` | api, worker, scheduler, postgres, redis, redpanda, mlflow |
 | `observability` | postgres, prometheus, grafana, loki |
 | `ollama-local` | ollama (GPU-accelerated) |
+
+## Worker Config (live, no restart)
+
+These keys live in the `worker_config` DB table and are read at the start of every cycle:
+
+| Key | Default | Description |
+|---|---|---|
+| `min_signal_confidence` | `0.6` | Confidence threshold (0.0–1.0) |
+| `watched_symbols` | `AAPL,MSFT,SPY` | Active symbols |
+| `watched_timeframe` | `5Min` | Bar timeframe |
+| `signal_max_age_seconds` | `1200` | Max signal age before stale discard |
+
+Change via dashboard (System → Worker Config) or API:
+```bash
+curl -X PUT http://localhost:8000/admin/worker-config/min_signal_confidence \
+  -H "Content-Type: application/json" \
+  -d '{"value": "0.55", "actor": "cli"}'
+```
