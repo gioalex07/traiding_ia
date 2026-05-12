@@ -17,6 +17,8 @@ from rac.features.service import FeatureService
 from rac.market_data.models import MarketDataIngestRequest
 from rac.market_data.repository import MarketDataRepository
 from rac.market_data.service import MarketDataIngestor
+from rac.ml.labeler import SignalLabelerService
+from rac.ml.trainer import ModelTrainer
 from rac.notifications.service import AlertService
 from rac.notifications.telegram import TelegramClient
 from rac.orders.executor import PaperOrderExecutor
@@ -148,7 +150,7 @@ async def run_cycle(settings: Settings, broker: AlpacaBrokerAdapter, alerts: Ale
     except Exception as exc:
         log.warning("mark_to_market_error: %s", exc)
 
-    # 3. Reporte diario (una vez al día después de las 21:00 UTC)
+    # 3. EOD: reporte diario + labeling + reentrenamiento (una vez al día a las 21:00 UTC)
     if alerts.should_send_daily_report():
         try:
             report = DailyReportService(portfolio_repo, order_repo).build("paper")
@@ -165,6 +167,23 @@ async def run_cycle(settings: Settings, broker: AlpacaBrokerAdapter, alerts: Ale
             log.info("daily_report_sent date=%s nav=%.2f pnl=%.2f", report.date, report.nav, report.pnl_daily)
         except Exception as exc:
             log.warning("daily_report_error: %s", exc)
+
+        try:
+            label_counts = SignalLabelerService(settings).run(
+                tp_pct=3.0, sl_pct=1.0, batch_size=5000
+            )
+            log.info("auto_label labeled=%d win=%d loss=%d",
+                     label_counts["labeled"], label_counts["win"], label_counts["loss"])
+            _audit(audit, "worker.ml_label", settings, label_counts)
+
+            if label_counts["labeled"] >= 50:
+                metrics = ModelTrainer(settings).train(include_timeout=False)
+                log.info("auto_retrain accuracy=%.3f roc_auc=%.3f",
+                         metrics.get("accuracy", 0), metrics.get("cv_roc_auc_mean", 0))
+                alerts.on_model_retrained(metrics)
+                _audit(audit, "worker.ml_retrain", settings, metrics)
+        except Exception as exc:
+            log.warning("auto_ml_error: %s", exc)
 
     # 4. Kill switch — bloquea ejecución de órdenes (reconciliación y MTM ya corrieron)
     ks_repo = KillSwitchRepository(settings)

@@ -60,6 +60,19 @@ class AlertService:
             f"Review portfolio and consider activating kill switch."
         )
 
+    def on_model_retrained(self, metrics: dict) -> None:
+        if "error" in metrics:
+            self._send(f"⚠️ <b>ML retrain failed</b>\n{metrics['error']}")
+            return
+        self._send(
+            f"🤖 <b>ML model retrained</b>\n"
+            f"Samples: {metrics.get('samples_train',0)+metrics.get('samples_test',0)} "
+            f"({metrics.get('win_rate_pct',0):.1f}% win rate)\n"
+            f"Accuracy: {metrics.get('accuracy',0):.3f} · "
+            f"ROC-AUC: {metrics.get('cv_roc_auc_mean',0):.3f}\n"
+            f"Top feature: {next(iter(metrics.get('feature_importance',{})), '-')}"
+        )
+
     def should_send_daily_report(self) -> bool:
         """True once per day after 21:00 UTC (≈ 4 pm ET market close)."""
         now = datetime.now(UTC)
