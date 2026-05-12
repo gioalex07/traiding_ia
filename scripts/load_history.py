@@ -19,9 +19,12 @@ TARGETS = [
     ("AAPL", "5Min", 6),
     ("MSFT", "5Min", 3),
     ("SPY",  "5Min", 3),
+    ("NVDA", "5Min", 3),
+    ("QQQ",  "5Min", 3),
+    ("TSLA", "5Min", 3),
 ]
 
-STRATEGIES = ["trend_following_v1", "mean_reversion_v1"]
+STRATEGIES = ["trend_following_v1", "mean_reversion_v1", "momentum_v1"]
 LABEL_BATCH = 5000
 LABEL_ROUNDS = 20  # up to 100k labels
 
