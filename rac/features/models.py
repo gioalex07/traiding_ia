@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 class FeatureComputeRequest(BaseModel):
     symbol: str = Field(min_length=1)
     timeframe: str = Field(min_length=1)
-    limit: int = Field(default=100, ge=3, le=1000)
+    limit: int = Field(default=100, ge=3, le=20_000)
     feature_set: str = Field(default="technical_v1", min_length=1)
 
 

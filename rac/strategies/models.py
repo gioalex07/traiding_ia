@@ -49,7 +49,7 @@ class SignalGenerateRequest(BaseModel):
     timeframe: str = Field(min_length=1)
     feature_set: str = Field(default="technical_v1", min_length=1)
     strategy_id: str = Field(default="trend_following_v1", min_length=1)
-    limit: int = Field(default=100, ge=5, le=1000)
+    limit: int = Field(default=100, ge=5, le=20_000)
 
 
 class SignalGenerateResult(BaseModel):
