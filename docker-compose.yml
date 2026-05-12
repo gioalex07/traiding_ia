@@ -47,6 +47,8 @@ services:
     read_only: true
     tmpfs:
       - /tmp
+    volumes:
+      - ./models:/app/models
 
   worker:
     image: rac/worker:dev
@@ -67,6 +69,8 @@ services:
       redpanda:
         condition: service_started
     user: "10001:10001"
+    volumes:
+      - ./models:/app/models
 
   scheduler:
     image: rac/scheduler:dev

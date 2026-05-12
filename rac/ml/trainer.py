@@ -3,12 +3,17 @@
 Uses scikit-learn RandomForest. Falls back gracefully if not installed.
 """
 import logging
+import os
+import pickle
+from pathlib import Path
 from typing import Any
 
 from rac.config import Settings
 from rac.ml.dataset import FEATURE_NAMES, TrainingDatasetBuilder
 
 log = logging.getLogger("rac.ml.trainer")
+
+MODEL_PATH = Path(os.getenv("RAC_MODEL_PATH", "models/signal_classifier.pkl"))
 
 
 def _to_matrix(X: list[dict[str, float]]) -> list[list[float]]:
@@ -66,6 +71,15 @@ class ModelTrainer:
             key=lambda x: x[1],
             reverse=True,
         )
+
+        # Persist model so the worker can load it for live confidence
+        try:
+            MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
+            with MODEL_PATH.open("wb") as f:
+                pickle.dump({"model": model, "feature_names": FEATURE_NAMES}, f)
+            log.info("model saved to %s", MODEL_PATH)
+        except Exception as exc:
+            log.warning("model_save_error: %s", exc)
 
         return {
             "samples_train":    len(X_train),

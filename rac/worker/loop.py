@@ -17,6 +17,7 @@ from rac.features.service import FeatureService
 from rac.market_data.models import MarketDataIngestRequest
 from rac.market_data.repository import MarketDataRepository
 from rac.market_data.service import MarketDataIngestor
+from rac.ml.confidence import MLConfidenceService
 from rac.ml.labeler import SignalLabelerService
 from rac.ml.trainer import ModelTrainer
 from rac.notifications.service import AlertService
@@ -97,7 +98,12 @@ async def _cancel_pending_orders(
 
 # --- lógica del ciclo ---
 
-async def run_cycle(settings: Settings, broker: AlpacaBrokerAdapter, alerts: AlertService) -> None:
+async def run_cycle(
+    settings: Settings,
+    broker: AlpacaBrokerAdapter,
+    alerts: AlertService,
+    ml: MLConfidenceService,
+) -> None:
     market_repo = MarketDataRepository(settings)
     feature_repo = FeatureRepository(settings)
     signal_repo = SignalRepository(settings)
@@ -182,6 +188,7 @@ async def run_cycle(settings: Settings, broker: AlpacaBrokerAdapter, alerts: Ale
                          metrics.get("accuracy", 0), metrics.get("cv_roc_auc_mean", 0))
                 alerts.on_model_retrained(metrics)
                 _audit(audit, "worker.ml_retrain", settings, metrics)
+                ml.load()  # reload freshly trained model into memory
         except Exception as exc:
             log.warning("auto_ml_error: %s", exc)
 
@@ -237,6 +244,7 @@ async def run_cycle(settings: Settings, broker: AlpacaBrokerAdapter, alerts: Ale
                 position=positions_by_symbol.get(symbol.upper()),
                 min_confidence=min_confidence,
                 max_signal_age=max_signal_age,
+                ml=ml,
             )
         except Exception as exc:
             log.error("symbol_error symbol=%s error=%s", symbol, exc)
@@ -259,6 +267,7 @@ async def _process_symbol(
     position: Position | None,
     min_confidence: float,
     max_signal_age: int,
+    ml: MLConfidenceService,
 ) -> None:
 
     bars = await broker.get_latest_bars(symbol, timeframe, limit=20)
@@ -307,13 +316,25 @@ async def _process_symbol(
             log.info("hold symbol=%s strategy=%s confidence=%.4f", symbol, strategy_id, float(signal["confidence"]))
             continue
 
-        confidence = float(signal["confidence"])
+        rule_confidence = float(signal["confidence"])
+        raw_values = signal.get("raw_payload", {})
+        if isinstance(raw_values, dict):
+            raw_values = raw_values.get("values", {})
+
+        ml_confidence = ml.predict(raw_values or {}, direction) if ml.available else None
+        confidence = ml_confidence if ml_confidence is not None else rule_confidence
+
+        source = "ml" if ml_confidence is not None else "rule"
         if confidence < min_confidence:
             log.info(
-                "low_confidence symbol=%s strategy=%s direction=%s confidence=%.4f threshold=%.2f",
-                symbol, strategy_id, direction, confidence, min_confidence,
+                "low_confidence symbol=%s strategy=%s direction=%s confidence=%.4f(%s) threshold=%.2f",
+                symbol, strategy_id, direction, confidence, source, min_confidence,
             )
             continue
+        log.info(
+            "signal_confidence symbol=%s strategy=%s direction=%s conf=%.4f(%s)",
+            symbol, strategy_id, direction, confidence, source,
+        )
 
         raw_time = signal["time"]
         signal_time: datetime = raw_time if isinstance(raw_time, datetime) else datetime.fromisoformat(str(raw_time))
@@ -449,18 +470,20 @@ async def main() -> None:
 
     broker = AlpacaBrokerAdapter(settings)
     alerts = AlertService(TelegramClient(settings.telegram_bot_token, settings.telegram_chat_id))
+    ml = MLConfidenceService()
+    ml.load()
     interval = settings.loop_interval_seconds
 
     log.info(
-        "worker started symbols=%s timeframe=%s interval=%ds telegram=%s",
+        "worker started symbols=%s timeframe=%s interval=%ds telegram=%s ml=%s",
         list(settings.watched_symbols), settings.watched_timeframe, interval,
-        alerts._client.configured,
+        alerts._client.configured, ml.available,
     )
 
     while True:
         started = asyncio.get_event_loop().time()
         try:
-            await run_cycle(settings, broker, alerts)
+            await run_cycle(settings, broker, alerts, ml)
         except Exception as exc:
             log.error("cycle_error: %s", exc, exc_info=True)
         elapsed = asyncio.get_event_loop().time() - started

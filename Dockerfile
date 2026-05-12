@@ -16,6 +16,8 @@ COPY --chown=rac:rac rac ./rac
 COPY --chown=rac:rac db ./db
 COPY --chown=rac:rac tests ./tests
 
+RUN mkdir -p /app/models && chown rac:rac /app/models
+
 USER 10001:10001
 
 FROM base AS api

@@ -10,3 +10,5 @@ __pycache__/
 docker-compose.override.yml
 borrar.txt
 
+signal_classifier.pkl
+*.pkl
