@@ -52,6 +52,8 @@ def _skip_reason(
     """Devuelve el motivo para saltarse la señal, o None si debe ejecutarse."""
     if age_seconds > max_age_seconds:
         return f"stale:{age_seconds:.0f}s"
+    if direction == "buy" and position is not None:
+        return "already_in_position"
     if direction == "sell" and position is None:
         return "no_position_to_sell"
     return None

@@ -12,8 +12,13 @@ class SkipReasonTest(unittest.TestCase):
     def test_fresh_buy_without_position_proceeds(self) -> None:
         self.assertIsNone(_skip_reason("buy", age_seconds=30, position=None))
 
-    def test_fresh_buy_with_position_proceeds(self) -> None:
-        self.assertIsNone(_skip_reason("buy", age_seconds=30, position=self._pos()))
+    def test_buy_with_existing_position_is_skipped(self) -> None:
+        reason = _skip_reason("buy", age_seconds=30, position=self._pos())
+        self.assertEqual(reason, "already_in_position")
+
+    def test_stale_takes_priority_over_already_in_position(self) -> None:
+        reason = _skip_reason("buy", age_seconds=300, position=self._pos(), max_age_seconds=120)
+        self.assertTrue(reason.startswith("stale:"))
 
     def test_fresh_sell_with_position_proceeds(self) -> None:
         self.assertIsNone(_skip_reason("sell", age_seconds=30, position=self._pos()))
