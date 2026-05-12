@@ -730,6 +730,58 @@ async def trade_outcomes_summary(environment: str = "paper") -> list[dict[str, o
     return TradeOutcomeRepository(settings).summary(environment=environment)
 
 
+@app.get("/signals/confidence-history")
+async def signal_confidence_history(
+    hours: int = 2,
+    bucket_minutes: int = 5,
+) -> list[dict[str, object]]:
+    """Returns confidence trend per symbol+strategy over the last N hours.
+    One data point per bucket_minutes window (last signal in each bucket).
+    """
+    settings = load_settings()
+    safe_hours = max(1, min(hours, 24))
+    safe_bucket = max(1, min(bucket_minutes, 60))
+    db = settings.database_url.replace("postgresql+psycopg://", "postgresql://")
+    import psycopg
+    from psycopg.rows import dict_row
+    with psycopg.connect(db, row_factory=dict_row) as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    symbol,
+                    strategy_id,
+                    date_trunc('hour', created_at)
+                        + INTERVAL '1 minute'
+                        * (EXTRACT(minute FROM created_at)::int / %s * %s) AS bucket,
+                    AVG(confidence) AS confidence,
+                    MODE() WITHIN GROUP (ORDER BY direction) AS direction
+                FROM signals
+                WHERE created_at >= now() - INTERVAL '1 hour' * %s
+                  AND direction != 'hold'
+                GROUP BY symbol, strategy_id, bucket
+                ORDER BY symbol, strategy_id, bucket
+                """,
+                (safe_bucket, safe_bucket, safe_hours),
+            )
+            rows = list(cursor.fetchall())
+
+    # Pivot into {symbol, strategy_id, points:[{t, conf}]}
+    from collections import defaultdict
+    grouped: dict = defaultdict(list)
+    for row in rows:
+        key = (str(row["symbol"]), str(row["strategy_id"]))
+        grouped[key].append({
+            "t": str(row["bucket"]),
+            "confidence": float(row["confidence"]),
+            "direction": str(row["direction"]),
+        })
+    return [
+        {"symbol": k[0], "strategy_id": k[1], "points": pts}
+        for k, pts in grouped.items()
+    ]
+
+
 @app.get("/strategies/performance")
 async def strategy_performance(environment: str = "paper") -> list[dict[str, object]]:
     settings = load_settings()

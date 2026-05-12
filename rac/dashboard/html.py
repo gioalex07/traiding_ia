@@ -321,6 +321,17 @@ DASHBOARD_HTML = """
         <div class="card-body no-pad" id="strategy-performance"><div class="card-body muted">Loading…</div></div>
       </div>
 
+      <!-- Confidence sparklines -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Confidence Trends — last 2h</span>
+          <span class="muted" style="font-size:11px">One point per 5-min window · colored by direction</span>
+        </div>
+        <div class="card-body" id="confidence-trends" style="min-height:100px">
+          <span class="muted">Loading…</span>
+        </div>
+      </div>
+
       <div class="grid-2">
         <div class="card"><div class="card-header"><span class="card-title">Latest Signals</span></div><div class="card-body no-pad" id="signals"><div class="card-body muted">Loading…</div></div></div>
         <div class="card"><div class="card-header"><span class="card-title">Latest Orders</span></div><div class="card-body no-pad" id="orders"><div class="card-body muted">Loading…</div></div></div>
@@ -483,7 +494,7 @@ function loadSection(sec) {
   if (sec==='backtest'){ loadBacktests(); }
   if (sec==='system')  { loadAuditTrail(); loadWorkerConfig(); }
   if (sec==='portfolio'){ loadFills(); loadTradeOutcomes(); }
-  if (sec==='trading') { loadStrategyPerformance(); }
+  if (sec==='trading') { loadStrategyPerformance(); loadConfidenceTrends(); }
 }
 
 // ── Market clock ────────────────────────────────────────────
@@ -612,7 +623,7 @@ async function refresh(){
 
   // Section-specific
   if(currentSection==='portfolio') { loadFills(); loadTradeOutcomes(); }
-  if(currentSection==='trading')   { loadStrategyPerformance(); }
+  if(currentSection==='trading')   { loadStrategyPerformance(); loadConfidenceTrends(); }
   if(currentSection==='ml')        { loadMlStats(); }
   if(currentSection==='system')    { loadAuditTrail(); loadWorkerConfig(); }
   if(currentSection==='backtest')  { loadBacktests(); }
@@ -847,6 +858,84 @@ async function loadTradeOutcomes(){
       {label:'Avg %',render:x=>{const p=Number(x.avg_pnl_pct),c=p>=0?'good':'bad';return`<span class="${c}">${p>=0?'+':''}${p.toFixed(2)}%</span>`;}},
     ]);
   }catch(e){$('trade-outcomes').innerHTML=`<span class="error">${e.message}</span>`;}
+}
+
+// ── Confidence Trends ────────────────────────────────────────
+const STRATEGY_COLORS = {
+  'trend_following_v1': '#3b82f6',
+  'mean_reversion_v1':  '#8b5cf6',
+};
+async function loadConfidenceTrends() {
+  try {
+    const r = await fetch('/signals/confidence-history?hours=2&bucket_minutes=5', { cache: 'no-store' });
+    const series = await r.json();
+    const el = $('confidence-trends');
+    if (!series.length) { el.innerHTML = '<span class="muted">No actionable signals in the last 2h</span>'; return; }
+
+    // Group by symbol
+    const bySymbol = {};
+    series.forEach(s => {
+      if (!bySymbol[s.symbol]) bySymbol[s.symbol] = [];
+      bySymbol[s.symbol].push(s);
+    });
+
+    el.innerHTML = '<div style="display:flex;gap:16px;flex-wrap:wrap">' +
+      Object.entries(bySymbol).map(([sym, strats]) => {
+        const id = `spark-${sym.toLowerCase()}`;
+        return `<div style="flex:1;min-width:200px">
+          <div style="font-size:12px;font-weight:700;margin-bottom:6px">${sym}</div>
+          <canvas id="${id}" style="height:60px;display:block;width:100%"></canvas>
+          <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap">
+            ${strats.map(s => {
+              const col = STRATEGY_COLORS[s.strategy_id] || '#94a3b8';
+              const last = s.points[s.points.length - 1];
+              return `<span style="font-size:10px;color:${col}">■ ${s.strategy_id.replace('_v1','')} ${last?Number(last.confidence).toFixed(3):'-'}</span>`;
+            }).join('')}
+          </div>
+        </div>`;
+      }).join('') + '</div>';
+
+    // Draw sparklines after elements are in DOM
+    Object.entries(bySymbol).forEach(([sym, strats]) => {
+      const cv = $(`spark-${sym.toLowerCase()}`);
+      if (!cv) return;
+      const rc = cv.getBoundingClientRect(), sc = window.devicePixelRatio || 1;
+      cv.width = Math.floor(rc.width * sc); cv.height = Math.floor(60 * sc);
+      const ctx = cv.getContext('2d'); ctx.scale(sc, sc);
+      const W = cv.width / sc, H = cv.height / sc;
+      ctx.fillStyle = '#f8fafc'; ctx.fillRect(0, 0, W, H);
+
+      // Draw threshold line at 0.5 and 0.6
+      [0.5, 0.6].forEach(thr => {
+        const y = H - (thr - 0.4) / 0.6 * H;
+        ctx.strokeStyle = thr === 0.5 ? '#e2e8f0' : '#fde68a';
+        ctx.lineWidth = 1; ctx.setLineDash(thr === 0.6 ? [4,3] : []);
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+        ctx.setLineDash([]);
+      });
+
+      strats.forEach(s => {
+        if (!s.points.length) return;
+        const col = STRATEGY_COLORS[s.strategy_id] || '#94a3b8';
+        const confs = s.points.map(p => Number(p.confidence));
+        const n = confs.length;
+        ctx.strokeStyle = col; ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        confs.forEach((v, i) => {
+          const x = (i / Math.max(n - 1, 1)) * W;
+          const y = H - Math.max(0, Math.min(1, (v - 0.4) / 0.6)) * H;
+          i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+        // Current value dot
+        const lastX = W, lastY = H - Math.max(0, Math.min(1, (confs[n-1] - 0.4) / 0.6)) * H;
+        ctx.fillStyle = col; ctx.beginPath(); ctx.arc(lastX-2, lastY, 3, 0, Math.PI*2); ctx.fill();
+      });
+    });
+  } catch (e) {
+    const el = $('confidence-trends');
+    if (el) el.innerHTML = `<span class="error">${e.message}</span>`;
+  }
 }
 
 // ── Strategy Performance ─────────────────────────────────────
