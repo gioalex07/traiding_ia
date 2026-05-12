@@ -32,6 +32,9 @@ from rac.market_data.models import (
 )
 from rac.market_data.repository import MarketDataRepository
 from rac.market_data.service import MarketDataIngestor
+from rac.ml.dataset import TrainingDatasetBuilder
+from rac.ml.labeler import SignalLabelerService
+from rac.ml.trainer import ModelTrainer
 from rac.orders.executor import PaperOrderExecutor
 from rac.orders.models import ExecuteSignalRequest, OrderExecutionResult, OrderStatus
 from rac.orders.outcome import TradeOutcomeRepository
@@ -673,6 +676,40 @@ async def audit_events(
         event_type=event_type,
         limit=limit,
     )
+
+
+@app.post("/ml/label")
+async def ml_label(
+    tp_pct: float = 3.0,
+    sl_pct: float = 1.0,
+    batch_size: int = 500,
+) -> dict[str, object]:
+    settings = load_settings()
+    return SignalLabelerService(settings).run(tp_pct=tp_pct, sl_pct=sl_pct, batch_size=batch_size)
+
+
+@app.get("/ml/stats")
+async def ml_stats() -> dict[str, object]:
+    settings = load_settings()
+    return SignalLabelerService(settings).stats()
+
+
+@app.post("/ml/train")
+async def ml_train(
+    include_timeout: bool = False,
+    n_estimators: int = 100,
+) -> dict[str, object]:
+    settings = load_settings()
+    return ModelTrainer(settings).train(include_timeout=include_timeout, n_estimators=n_estimators)
+
+
+@app.get("/ml/dataset/size")
+async def ml_dataset_size(include_timeout: bool = False) -> dict[str, object]:
+    settings = load_settings()
+    X, y, _ = TrainingDatasetBuilder(settings).build(include_timeout=include_timeout)
+    wins = sum(y)
+    return {"samples": len(y), "wins": wins, "losses": len(y) - wins,
+            "win_rate_pct": round(wins / len(y) * 100, 1) if y else 0}
 
 
 @app.get("/trade-outcomes")
