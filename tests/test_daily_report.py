@@ -104,7 +104,7 @@ class AlertServiceDailyReportTest(unittest.TestCase):
             cash=85000.0,
             positions=[],
             fills_today=[],
-            strategies=("trend_following_v1", "mean_reversion_v1"),
+            strategies=("EQ_TREND_001", "EQ_REVERSION_001"),
         )
 
     def test_report_sends_one_message(self) -> None:
@@ -125,7 +125,7 @@ class AlertServiceDailyReportTest(unittest.TestCase):
     def test_report_contains_strategies(self) -> None:
         svc, client = self._service()
         svc.on_daily_report(**self._base_kwargs())
-        self.assertIn("trend_following_v1", client.sent[0])
+        self.assertIn("EQ_TREND_001", client.sent[0])
 
     def test_report_with_positions_mentions_symbol(self) -> None:
         svc, client = self._service()
@@ -177,7 +177,7 @@ class AlertServiceDailyReportDeduplicationTest(unittest.TestCase):
             cash=100_000.0,
             positions=[],
             fills_today=[],
-            strategies=("trend_following_v1",),
+            strategies=("EQ_TREND_001",),
         )
         self.assertFalse(svc.should_send_daily_report())
 

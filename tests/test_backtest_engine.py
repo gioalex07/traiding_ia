@@ -36,7 +36,7 @@ def _make_bars(
 class BacktestEngineTest(unittest.TestCase):
     def _request(self, bars: list[dict]) -> BacktestRequest:
         return BacktestRequest(
-            strategy_id="trend_following_v1",
+            strategy_id="EQ_TREND_001",
             symbol="AAPL",
             timeframe="1Min",
             start=bars[0]["time"].replace(tzinfo=None),

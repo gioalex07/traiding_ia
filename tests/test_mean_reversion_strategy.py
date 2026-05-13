@@ -129,7 +129,7 @@ class MeanReversionConfidenceTest(unittest.TestCase):
 
 class MeanReversionManifestTest(unittest.TestCase):
     def test_strategy_id(self) -> None:
-        self.assertEqual(MeanReversionStrategy().manifest.strategy_id, "mean_reversion_v1")
+        self.assertEqual(MeanReversionStrategy().manifest.strategy_id, "EQ_REVERSION_001")
 
     def test_required_features_present(self) -> None:
         required = MeanReversionStrategy().manifest.required_features

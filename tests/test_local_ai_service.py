@@ -24,7 +24,7 @@ class FakeSignalRepository:
             "id": signal_id,
             "time": datetime.now(UTC),
             "environment": "paper",
-            "strategy_id": "trend_following_v1",
+            "strategy_id": "EQ_TREND_001",
             "strategy_version": "0.1.0",
             "symbol": "AAPL",
             "timeframe": "1MIN",
