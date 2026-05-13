@@ -78,7 +78,7 @@ class SignalRepository:
                                invalidation_rules, raw_payload, created_at
                         FROM signals
                         WHERE symbol = %s AND timeframe = %s AND strategy_id = %s
-                        ORDER BY created_at DESC
+                        ORDER BY time DESC, created_at DESC
                         LIMIT %s
                         """,
                         (symbol.upper(), timeframe.upper(), strategy_id, limit),
@@ -92,7 +92,7 @@ class SignalRepository:
                                invalidation_rules, raw_payload, created_at
                         FROM signals
                         WHERE symbol = %s AND timeframe = %s
-                        ORDER BY created_at DESC
+                        ORDER BY time DESC, created_at DESC
                         LIMIT %s
                         """,
                         (symbol.upper(), timeframe.upper(), limit),
@@ -138,7 +138,7 @@ class SignalRepository:
                            stop_loss_pct, take_profit_pct, max_position_pct,
                            invalidation_rules, raw_payload, created_at
                     FROM signals
-                    ORDER BY created_at DESC
+                    ORDER BY time DESC, created_at DESC
                     LIMIT %s
                     """,
                     (limit,),
