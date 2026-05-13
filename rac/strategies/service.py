@@ -40,10 +40,10 @@ class StrategyEngine:
     def _load_strategy(
         strategy_id: str,
     ) -> TrendFollowingStrategy | MeanReversionStrategy | MomentumStrategy:
-        if strategy_id == "trend_following_v1":
+        if strategy_id == "EQ_TREND_001":
             return TrendFollowingStrategy()
-        if strategy_id == "mean_reversion_v1":
+        if strategy_id == "EQ_REVERSION_001":
             return MeanReversionStrategy()
-        if strategy_id == "momentum_v1":
+        if strategy_id == "EQ_MOMENTUM_001":
             return MomentumStrategy()
         raise ValueError(f"unsupported_strategy:{strategy_id}")

@@ -4,7 +4,7 @@ from rac.strategies.models import Signal, SignalDirection, StrategyManifest
 from rac.strategies.validation import StrategyValidator
 
 MOMENTUM_MANIFEST = StrategyManifest(
-    strategy_id="momentum_v1",
+    strategy_id="EQ_MOMENTUM_001",
     version="0.1.0",
     required_features=["close", "return_1", "macd", "macd_signal", "macd_hist", "rsi_14"],
     stop_loss_pct=1.5,

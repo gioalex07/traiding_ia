@@ -24,7 +24,7 @@ TARGETS = [
     ("TSLA", "5Min", 3),
 ]
 
-STRATEGIES = ["trend_following_v1", "mean_reversion_v1", "momentum_v1"]
+STRATEGIES = ["EQ_TREND_001", "EQ_REVERSION_001", "EQ_MOMENTUM_001"]
 LABEL_BATCH = 5000
 LABEL_ROUNDS = 20  # up to 100k labels
 
