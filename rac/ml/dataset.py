@@ -46,27 +46,24 @@ class TrainingDatasetBuilder:
 
     def build(
         self,
-        include_timeout: bool = False,
+        include_timeout: bool = True,
         limit: int = 50_000,
     ) -> tuple[list[dict[str, float]], list[int], list[str]]:
         """Returns (X, y, signal_ids).
 
         y=1 means win (profitable), y=0 means loss.
-        Timeouts are excluded by default (ambiguous outcome).
+        Timeouts are reclassified by actual pnl_pct: positive → win, negative → loss.
+        SPY and MSFT are excluded (win rates <10% with TP=2% poison the model).
         """
-        outcomes_filter = "('win','loss')" if not include_timeout else "('win','loss','timeout')"
-        # SPY and MSFT excluded: SPY buy win rate ~4%, MSFT ~8% with TP=2%,
-        # both poison the model toward predicting loss for all signals.
         with psycopg.connect(self._db, row_factory=dict_row) as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    f"""
-                    SELECT sl.signal_id, sl.direction, sl.outcome,
+                    """
+                    SELECT sl.signal_id, sl.direction, sl.outcome, sl.pnl_pct,
                            s.raw_payload->'values' AS values
                     FROM signal_labels sl
                     JOIN signals s ON s.id = sl.signal_id
-                    WHERE sl.outcome IN {outcomes_filter}
-                      AND s.raw_payload->'values' IS NOT NULL
+                    WHERE s.raw_payload->'values' IS NOT NULL
                       AND s.symbol NOT IN ('SPY', 'MSFT')
                     ORDER BY sl.labeled_at
                     LIMIT %s
@@ -80,6 +77,12 @@ class TrainingDatasetBuilder:
         ids: list[str] = []
 
         for row in rows:
+            outcome = str(row["outcome"])
+            # Reclassify timeouts by actual P&L instead of discarding them
+            if outcome == "timeout":
+                pnl = float(row["pnl_pct"] or 0)
+                outcome = "win" if pnl > 0 else "loss"
+
             values = row["values"]
             if isinstance(values, str):
                 values = json.loads(values)
@@ -88,7 +91,7 @@ class TrainingDatasetBuilder:
             try:
                 features = extract_features(values, str(row["direction"]))
                 X.append(features)
-                y.append(1 if row["outcome"] == "win" else 0)
+                y.append(1 if outcome == "win" else 0)
                 ids.append(str(row["signal_id"]))
             except (TypeError, ValueError):
                 continue

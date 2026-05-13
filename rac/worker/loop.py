@@ -186,7 +186,7 @@ async def run_cycle(
             _audit(audit, "worker.ml_label", settings, label_counts)
 
             if label_counts["labeled"] >= 50:
-                metrics = ModelTrainer(settings).train(include_timeout=False)
+                metrics = ModelTrainer(settings).train()
                 log.info("auto_retrain accuracy=%.3f roc_auc=%.3f",
                          metrics.get("accuracy", 0), metrics.get("cv_roc_auc_mean", 0))
                 alerts.on_model_retrained(metrics)
