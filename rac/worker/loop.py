@@ -14,6 +14,8 @@ from rac.db.bootstrap import bootstrap_database
 from rac.features.models import FeatureComputeRequest
 from rac.features.repository import FeatureRepository
 from rac.features.service import FeatureService
+from rac.local_ai.client import OllamaClient
+from rac.local_ai.reviewer import SignalReviewer
 from rac.market_data.models import MarketDataIngestRequest
 from rac.market_data.repository import MarketDataRepository
 from rac.market_data.service import MarketDataIngestor
@@ -103,6 +105,7 @@ async def run_cycle(
     broker: AlpacaBrokerAdapter,
     alerts: AlertService,
     ml: MLConfidenceService,
+    reviewer: SignalReviewer,
 ) -> None:
     market_repo = MarketDataRepository(settings)
     feature_repo = FeatureRepository(settings)
@@ -245,6 +248,7 @@ async def run_cycle(
                 min_confidence=min_confidence,
                 max_signal_age=max_signal_age,
                 ml=ml,
+                reviewer=reviewer,
             )
         except Exception as exc:
             log.error("symbol_error symbol=%s error=%s", symbol, exc)
@@ -268,6 +272,7 @@ async def _process_symbol(
     min_confidence: float,
     max_signal_age: int,
     ml: MLConfidenceService,
+    reviewer: SignalReviewer,
 ) -> None:
 
     bars = await broker.get_latest_bars(symbol, timeframe, limit=20)
@@ -352,9 +357,19 @@ async def _process_symbol(
             log.info("already_executed symbol=%s strategy=%s signal_id=%s", symbol, strategy_id, signal_id)
             continue
 
+        # LLM veto layer — second opinion before execution
+        review = reviewer.review(raw_values or {}, direction, confidence, symbol)
+        if not review.execute:
+            log.info(
+                "llm_veto symbol=%s strategy=%s direction=%s reason=%r latency=%dms",
+                symbol, strategy_id, direction, review.reason, review.latency_ms,
+            )
+            continue
+
         log.info(
-            "executing symbol=%s strategy=%s direction=%s confidence=%.4f exposure=%.2f%%",
-            symbol, strategy_id, direction, float(signal["confidence"]), current_asset_exposure_pct,
+            "executing symbol=%s strategy=%s direction=%s confidence=%.4f exposure=%.2f%% llm=%s(%dms)",
+            symbol, strategy_id, direction, float(signal["confidence"]),
+            current_asset_exposure_pct, review.source, review.latency_ms,
         )
         result = await PaperOrderExecutor(
             settings=settings,
@@ -505,12 +520,14 @@ async def main() -> None:
     alerts = AlertService(TelegramClient(settings.telegram_bot_token, settings.telegram_chat_id))
     ml = MLConfidenceService()
     ml.load()
+    reviewer = SignalReviewer(OllamaClient(settings.ollama_base_url, timeout_seconds=15))
     interval = settings.loop_interval_seconds
 
+    llm_model = reviewer._resolve_model()
     log.info(
-        "worker started symbols=%s timeframe=%s interval=%ds telegram=%s ml=%s",
+        "worker started symbols=%s timeframe=%s interval=%ds telegram=%s ml=%s llm=%s",
         list(settings.watched_symbols), settings.watched_timeframe, interval,
-        alerts._client.configured, ml.available,
+        alerts._client.configured, ml.available, llm_model or "none",
     )
 
     asyncio.create_task(_fill_stream_worker(settings, broker, alerts))
@@ -518,7 +535,7 @@ async def main() -> None:
     while True:
         started = asyncio.get_event_loop().time()
         try:
-            await run_cycle(settings, broker, alerts, ml)
+            await run_cycle(settings, broker, alerts, ml, reviewer)
         except Exception as exc:
             log.error("cycle_error: %s", exc, exc_info=True)
         elapsed = asyncio.get_event_loop().time() - started
