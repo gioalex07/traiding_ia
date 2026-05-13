@@ -116,6 +116,33 @@ DASHBOARD_HTML = """
       .kpi-row { grid-template-columns: 1fr 1fr; }
       .grid-2, .grid-3, .col-8-4 { grid-template-columns: 1fr; }
     }
+    /* ── Decision Pipeline ── */
+    .pipe-symbol { font-size:13px; font-weight:700; color:#e2e8f0; padding:10px 14px 4px; letter-spacing:.04em; }
+    .pipe-row { display:grid; grid-template-columns:130px 70px 52px 1fr 1fr 90px; align-items:center; gap:0; padding:7px 14px; border-top:1px solid #1e293b; font-size:12px; }
+    .pipe-row:hover { background:rgba(255,255,255,.03); }
+    .pipe-strat { color:#94a3b8; font-family:monospace; font-size:11px; }
+    .pipe-dir { font-weight:600; }
+    .pipe-dir.buy  { color:#22c55e; }
+    .pipe-dir.sell { color:#ef4444; }
+    .pipe-dir.hold { color:#475569; }
+    .pipe-rsi { color:#94a3b8; font-size:11px; }
+    .pipe-bar-wrap { position:relative; height:6px; background:#1e293b; border-radius:3px; margin:0 6px; }
+    .pipe-bar { height:6px; border-radius:3px; transition:width .4s; }
+    .pipe-bar.pass { background:#22c55e; }
+    .pipe-bar.fail { background:#ef4444; }
+    .pipe-bar.hold { background:#334155; }
+    .pipe-conf { font-size:11px; color:#94a3b8; white-space:nowrap; }
+    .gate { display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:50%; font-size:12px; }
+    .gate.pass { background:rgba(34,197,94,.15); }
+    .gate.fail { background:rgba(239,68,68,.15); }
+    .gate.hold { background:rgba(71,85,105,.15); }
+    .pipe-status { display:flex; align-items:center; gap:6px; font-size:11px; font-weight:600; }
+    .pipe-status.ready { color:#22c55e; }
+    .pipe-status.blocked { color:#ef4444; }
+    .pipe-status.waiting { color:#475569; }
+    .pipe-group { border-bottom:1px solid #0f172a; }
+    .pipe-group:last-child { border-bottom:none; }
+    .pipe-header { display:grid; grid-template-columns:130px 70px 52px 1fr 1fr 90px; gap:0; padding:5px 14px; font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#475569; border-bottom:1px solid #1e293b; background:#0f172a; }
   </style>
 </head>
 <body>
@@ -138,6 +165,10 @@ DASHBOARD_HTML = """
     <div class="nav-item" data-sec="trading">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
       Signals & Orders
+    </div>
+    <div class="nav-item" data-sec="pipeline">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      Decision Pipeline
     </div>
     <div class="nav-section">Intelligence</div>
     <div class="nav-item" data-sec="ml">
@@ -347,8 +378,9 @@ DASHBOARD_HTML = """
             <div class="field"><label>Timeframe</label><input id="pipeline-timeframe" value="1Day"></div>
             <div class="field"><label>Strategy</label>
               <select id="pipeline-strategy">
-                <option value="trend_following_v1">trend_following_v1</option>
-                <option value="mean_reversion_v1">mean_reversion_v1</option>
+                <option value="EQ_TREND_001">EQ_TREND_001</option>
+                <option value="EQ_REVERSION_001">EQ_REVERSION_001</option>
+                <option value="EQ_MOMENTUM_001">EQ_MOMENTUM_001</option>
               </select>
             </div>
             <div class="field"><label>Start</label><input id="pipeline-start" type="date"></div>
@@ -365,6 +397,23 @@ DASHBOARD_HTML = """
           <button class="sm" onclick="reconcileOrders()">Reconcile</button>
         </div>
         <div class="card-body" id="reconciliation"><span class="muted">Click Reconcile to sync submitted orders with Alpaca</span></div>
+      </div>
+    </section>
+
+    <!-- ═══ DECISION PIPELINE ═══════════════════════════════════ -->
+    <section class="section" id="s-pipeline">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Decision Pipeline — live</span>
+          <span class="muted" style="font-size:11px" id="pipeline-ts">Auto-refresh 30s</span>
+          <button class="sm" onclick="loadPipeline()">Refresh</button>
+        </div>
+        <div class="card-body" id="pipeline-body" style="padding:0">
+          <div style="padding:16px;color:var(--muted)">Loading…</div>
+        </div>
+      </div>
+      <div style="color:var(--muted);font-size:11px;padding:4px 2px">
+        ⚪ hold &nbsp;|&nbsp; 🟢 gate passed &nbsp;|&nbsp; 🔴 gate failed &nbsp;|&nbsp; IEX data has ~15 min delay
       </div>
     </section>
 
@@ -490,12 +539,77 @@ document.querySelectorAll('.nav-item[data-sec]').forEach(el => {
 });
 
 function loadSection(sec) {
-  if (sec==='ml')      { loadMlStats(); }
-  if (sec==='backtest'){ loadBacktests(); }
-  if (sec==='system')  { loadAuditTrail(); loadWorkerConfig(); }
-  if (sec==='portfolio'){ loadFills(); loadTradeOutcomes(); }
-  if (sec==='trading') { loadStrategyPerformance(); loadConfidenceTrends(); }
+  if (sec==='ml')        { loadMlStats(); }
+  if (sec==='backtest')  { loadBacktests(); }
+  if (sec==='system')    { loadAuditTrail(); loadWorkerConfig(); }
+  if (sec==='portfolio') { loadFills(); loadTradeOutcomes(); }
+  if (sec==='trading')   { loadStrategyPerformance(); loadConfidenceTrends(); }
+  if (sec==='pipeline')  { loadPipeline(); }
 }
+
+// ── Decision Pipeline ───────────────────────────────────────
+let pipelineTimer = null;
+async function loadPipeline() {
+  const body = $('pipeline-body');
+  const ts = $('pipeline-ts');
+  try {
+    const resp = await fetch('/signals/pipeline', {cache:'no-store'});
+    const rows = await resp.json();
+    if (!rows.length) {
+      body.innerHTML = '<div style="padding:16px;color:var(--muted)">No signals in the last 30 minutes. Market may be closed.</div>';
+      return;
+    }
+    // Group by symbol
+    const bySymbol = {};
+    rows.forEach(r => { if (!bySymbol[r.symbol]) bySymbol[r.symbol]=[];  bySymbol[r.symbol].push(r); });
+    const stratLabel = { 'EQ_TREND_001':'TREND', 'EQ_REVERSION_001':'REV', 'EQ_MOMENTUM_001':'MOM' };
+    let html = '<div class="pipe-header"><span>Strategy</span><span>Direction</span><span>RSI</span><span style="padding-left:6px">ML Confidence</span><span></span><span>Status</span></div>';
+    Object.keys(bySymbol).sort().forEach(sym => {
+      html += `<div class="pipe-group"><div class="pipe-symbol">◈ ${sym}</div>`;
+      bySymbol[sym].forEach(r => {
+        const strat = stratLabel[r.strategy_id] || r.strategy_id;
+        const dir = r.direction;
+        const isHold = dir === 'hold';
+        const mlConf = r.ml_confidence;
+        const effConf = r.effective_confidence;
+        const thresh = r.threshold;
+        const gateML = r.gate_ml;
+        const rsi = r.key_features?.rsi_14 ?? '—';
+        const barPct = isHold ? 0 : Math.round((effConf || 0) * 100);
+        const barCls = isHold ? 'hold' : (gateML ? 'pass' : 'fail');
+        const gateS = isHold ? '⚪' : '🟢';
+        const gateM = isHold ? '<span class="gate hold">⚪</span>'
+                    : gateML  ? '<span class="gate pass">🟢</span>'
+                              : '<span class="gate fail">🔴</span>';
+        let statusHtml;
+        if (isHold) {
+          statusHtml = '<span class="pipe-status waiting">— hold</span>';
+        } else if (gateML) {
+          statusHtml = '<span class="pipe-status ready">✓ LLM pending</span>';
+        } else {
+          statusHtml = `<span class="pipe-status blocked">✗ ML ${(effConf*100).toFixed(0)}% < ${(thresh*100).toFixed(0)}%</span>`;
+        }
+        const mlText = mlConf != null ? `${(mlConf*100).toFixed(1)}%` : `rule ${(effConf*100).toFixed(1)}%`;
+        html += `<div class="pipe-row">
+          <span class="pipe-strat">${strat}</span>
+          <span class="pipe-dir ${dir}">${dir.toUpperCase()}</span>
+          <span class="pipe-rsi">${rsi}</span>
+          <div><div class="pipe-bar-wrap"><div class="pipe-bar ${barCls}" style="width:${barPct}%"></div></div></div>
+          <span class="pipe-conf">${mlText}</span>
+          ${statusHtml}
+        </div>`;
+      });
+      html += '</div>';
+    });
+    body.innerHTML = html;
+    const now = new Date();
+    ts.textContent = 'Updated ' + now.toLocaleTimeString() + ' · auto 30s';
+  } catch(e) {
+    body.innerHTML = `<div style="padding:16px;color:var(--bad)">Error: ${e.message}</div>`;
+  }
+}
+// Auto-refresh pipeline every 30s when section is active
+setInterval(() => { if (document.querySelector('.nav-item.active[data-sec="pipeline"]')) loadPipeline(); }, 30000);
 
 // ── Market clock ────────────────────────────────────────────
 const BASELINE = 100000;

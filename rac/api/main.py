@@ -788,6 +788,87 @@ async def strategy_performance(environment: str = "paper") -> list[dict[str, obj
     return StrategyPerformanceService(settings).get_performance(environment)
 
 
+@app.get("/signals/pipeline")
+async def signal_pipeline() -> list[dict[str, object]]:
+    """Latest signal per symbol × strategy with ML confidence layer evaluation.
+
+    Returns one entry per (symbol, strategy_id) showing:
+    - direction and rule-based confidence from the strategy
+    - ML model P(win) prediction
+    - whether each gate passed (strategy, ml, threshold)
+    """
+    import psycopg
+    from psycopg.rows import dict_row
+
+    from rac.ml.confidence import MLConfidenceService
+
+    settings = load_settings()
+    db = settings.database_url.replace("postgresql+psycopg://", "postgresql://")
+
+    ml = MLConfidenceService()
+    ml.load()
+
+    threshold = settings.min_signal_confidence
+    try:
+        dyn = WorkerConfigRepository(settings)
+        threshold = dyn.effective_confidence(threshold)
+    except Exception:
+        pass
+
+    with psycopg.connect(db, row_factory=dict_row) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT ON (symbol, strategy_id)
+                    id, time, symbol, timeframe, strategy_id,
+                    direction, confidence, raw_payload
+                FROM signals
+                WHERE time > now() - INTERVAL '30 minutes'
+                ORDER BY symbol, strategy_id, time DESC, created_at DESC
+                """,
+            )
+            rows = list(cur.fetchall())
+
+    result: list[dict[str, object]] = []
+    for row in rows:
+        raw = row.get("raw_payload") or {}
+        values: dict = raw.get("values", {}) if isinstance(raw, dict) else {}
+        direction = str(row["direction"])
+        rule_conf = float(row["confidence"])
+
+        ml_conf: float | None = None
+        if ml.available and direction != "hold" and values:
+            ml_conf = ml.predict(values, direction)
+
+        effective_conf = ml_conf if ml_conf is not None else rule_conf
+        ml_source = "ml" if ml_conf is not None else "rule"
+
+        result.append({
+            "symbol":         str(row["symbol"]),
+            "strategy_id":    str(row["strategy_id"]),
+            "timeframe":      str(row["timeframe"]),
+            "signal_time":    row["time"].isoformat() if row["time"] else None,
+            "direction":      direction,
+            "rule_confidence": round(rule_conf, 4),
+            "ml_confidence":  round(ml_conf, 4) if ml_conf is not None else None,
+            "effective_confidence": round(effective_conf, 4),
+            "confidence_source": ml_source,
+            "threshold":      threshold,
+            "gate_strategy":  direction != "hold",
+            "gate_ml":        direction != "hold" and effective_conf >= threshold,
+            "key_features": {
+                "rsi_14":       round(float(values.get("rsi_14") or 50), 1),
+                "macd_hist":    round(float(values.get("macd_hist") or 0), 5),
+                "bb_pct_b":     round(float(values.get("bb_pct_b") or 0.5), 3),
+                "volatility_5": round(float(values.get("volatility_5") or 0), 5),
+                "close":        round(float(values.get("close") or 0), 2),
+            },
+        })
+
+    result.sort(key=lambda x: (x["symbol"], x["strategy_id"]))
+    return result
+
+
 @app.post("/risk/evaluate", response_model=RiskDecision)
 async def evaluate_risk(request: RiskEvaluationRequest) -> RiskDecision:
     settings = load_settings()
