@@ -55,6 +55,8 @@ class TrainingDatasetBuilder:
         Timeouts are excluded by default (ambiguous outcome).
         """
         outcomes_filter = "('win','loss')" if not include_timeout else "('win','loss','timeout')"
+        # SPY and MSFT excluded: SPY buy win rate ~4%, MSFT ~8% with TP=2%,
+        # both poison the model toward predicting loss for all signals.
         with psycopg.connect(self._db, row_factory=dict_row) as conn:
             with conn.cursor() as cur:
                 cur.execute(
@@ -65,6 +67,7 @@ class TrainingDatasetBuilder:
                     JOIN signals s ON s.id = sl.signal_id
                     WHERE sl.outcome IN {outcomes_filter}
                       AND s.raw_payload->'values' IS NOT NULL
+                      AND s.symbol NOT IN ('SPY', 'MSFT')
                     ORDER BY sl.labeled_at
                     LIMIT %s
                     """,

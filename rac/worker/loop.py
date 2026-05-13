@@ -179,7 +179,7 @@ async def run_cycle(
 
         try:
             label_counts = SignalLabelerService(settings).run(
-                tp_pct=3.0, sl_pct=1.0, batch_size=5000
+                tp_pct=2.0, sl_pct=1.0, batch_size=5000
             )
             log.info("auto_label labeled=%d win=%d loss=%d",
                      label_counts["labeled"], label_counts["win"], label_counts["loss"])

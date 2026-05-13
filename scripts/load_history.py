@@ -95,7 +95,7 @@ def generate_signals(symbol: str, timeframe: str, strategy_id: str, limit: int =
 def label_signals(round_n: int) -> int:
     log(f"Labeling batch {round_n}…")
     try:
-        result = api("POST", f"/ml/label?tp_pct=3.0&sl_pct=1.0&batch_size={LABEL_BATCH}")
+        result = api("POST", f"/ml/label?tp_pct=2.0&sl_pct=1.0&batch_size={LABEL_BATCH}")
         labeled = result.get("labeled", 0)
         log(f"  → labeled={labeled} win={result.get('win',0)} loss={result.get('loss',0)} skipped={result.get('skipped',0)}")
         return labeled

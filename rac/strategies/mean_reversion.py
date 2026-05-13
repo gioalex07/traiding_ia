@@ -7,8 +7,8 @@ MEAN_REVERSION_MANIFEST = StrategyManifest(
     strategy_id="EQ_REVERSION_001",
     version="0.2.0",
     required_features=["close", "sma_20", "rsi_14", "bb_pct_b"],
-    stop_loss_pct=1.0,    # cut quickly if bounce doesn't happen
-    take_profit_pct=3.0,  # let the reversion materialize fully (ratio 3:1)
+    stop_loss_pct=1.0,
+    take_profit_pct=2.0,
     max_position_pct=2.0,
     invalidation_rules=[
         "rsi_exits_oversold_for_buy",

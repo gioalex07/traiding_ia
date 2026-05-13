@@ -7,8 +7,8 @@ TREND_FOLLOWING_MANIFEST = StrategyManifest(
     strategy_id="EQ_TREND_001",
     version="0.2.0",
     required_features=["close", "sma_3", "sma_5", "return_1", "volatility_5"],
-    stop_loss_pct=1.5,
-    take_profit_pct=3.0,
+    stop_loss_pct=1.0,
+    take_profit_pct=2.0,
     max_position_pct=2.0,
     invalidation_rules=[
         "close_crosses_below_sma_5_for_buy",

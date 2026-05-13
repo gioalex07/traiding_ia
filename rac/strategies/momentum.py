@@ -7,8 +7,8 @@ MOMENTUM_MANIFEST = StrategyManifest(
     strategy_id="EQ_MOMENTUM_001",
     version="0.1.0",
     required_features=["close", "return_1", "macd", "macd_signal", "macd_hist", "rsi_14"],
-    stop_loss_pct=1.5,
-    take_profit_pct=4.0,
+    stop_loss_pct=1.0,
+    take_profit_pct=2.5,
     max_position_pct=2.0,
     invalidation_rules=[
         "macd_hist_flips_negative_for_buy",
